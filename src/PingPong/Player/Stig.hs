@@ -47,6 +47,30 @@ deltaAngle a1 a2
 
 -- Simulation Helpers
 
+-- | Check that the arm elements are valid
+checkArmElements :: Arm -> Arm
+checkArmElements [] = error "The Empty Arm is no valid"
+checkArmElements l@[Link _ len] = bool (error "Bat has wrong length it must be 0.1") l (len == 0.1)
+checkArmElements [Joint _ _] = error "A Joint can't be the end of the Arm"
+checkArmElements (j@(Joint _ _):xs@(Link _ _ : _)) = j : checkArmElements xs
+checkArmElements (Joint _ _:(Joint _ _ : _)) = error "Two Joints together"
+checkArmElements (Link _ _:(Link _ _ : _)) = error "Two Links together"
+checkArmElements (l@(Link _ len):xs@(Joint _ _ : _)) = 
+    bool (error "Arm has a Link with wrong length [.1, .5]") (l:checkArmElements xs) (0.1 <= len && len <= 0.5)
+
+
+-- | Check that the arm is valid
+checkArm :: Arm -> Arm
+checkArm ar 
+    = bool (error "Wrong number of Joints [2..5]") (checkArmElements ar) (2 <= jointCount && jointCount <= 5) 
+    where 
+        jointCount = foldl f 0 ar
+            where
+                f :: Integer -> Element -> Integer
+                f n (Joint _ _) = n + 1
+                f n (Link _ _) = n
+            
+
 -- | Get the current Joint parameters as a Motion
 getCurrentJoints :: Arm -> Motion
 getCurrentJoints [] = []
@@ -79,15 +103,16 @@ hotPink = makeColor 1.0 0.2 0.7 1
 
 -- | Arm to use
 stigArm :: Arm
-stigArm = [ Joint red (-0.3) -- (0.1)
-           , Link paleBlue 0.5
-           , Joint red 1.3 -- (0.1)
-           , Link paleBlue 0.4
-           , Joint red 0.9 -- (-0.1)
-           , Link paleBlue 0.2
-           , Joint red 0.5 -- (-0.1)
-           , Link hotPink 0.1 -- Bat
-           ]
+stigArm = checkArm 
+    [ Joint red (-0.3) -- (0.1)
+    , Link paleBlue 0.5
+    , Joint red 1.3 -- (0.1)
+    , Link paleBlue 0.4
+    , Joint red 0.9 -- (-0.1)
+    , Link paleBlue 0.2
+    , Joint red 0.5 -- (-0.1)
+    , Link hotPink 0.1 -- Bat
+    ]
 
 -- | Separation from the center of the table
 stigFoot :: Float

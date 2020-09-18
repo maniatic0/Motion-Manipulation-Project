@@ -1,3 +1,4 @@
+-- By Christian Oliveros and Minmin Chen
 module PingPong.Player.Stig (stig) where
 
 import Data.Bool (bool)
@@ -90,7 +91,7 @@ applyMotionLimits = map f
 
 -- | Stig's player
 stig :: Player
-stig = Player stigArm stigFoot stigAction
+stig = Player stigArm stigFoot stigAction stigCollide
 
 paleBlue :: Color
 paleBlue = makeColor 0.5 0.5 0.6 1
@@ -138,6 +139,12 @@ armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
         g = stigThreshold 0.0
         f = deltaAngle . g
 
+
+-- | Calculates a linear collision between a point and line
+stigCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
+            -> (Float, Point 2 Float, LineSegment 2 () Float) 
+            -> Point 2 Float
+stigCollide _ _ = Point2 0.0 0.0
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm = 

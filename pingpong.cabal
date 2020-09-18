@@ -7,7 +7,7 @@ cabal-version: 1.12
 -- hash: a3f65e9f43ed693610823ef12f129ce4071b36055aea8e8e25f961aa37911cae
 
 name:           pingpong
-version:        0.1.0.0
+version:        0.1.1.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/test#readme>
 homepage:       https://github.com/githubuser/test#readme
 bug-reports:    https://github.com/githubuser/test/issues

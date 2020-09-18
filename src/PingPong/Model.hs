@@ -23,10 +23,14 @@ data BallState = BallState
   }
 
 data Player = Player 
-  { arm    :: Arm
-  , foot   :: Float
-  , action :: BallState -> Arm -> IO Motion
+  { arm     :: Arm
+  , foot    :: Float
+  , action  :: BallState -> Arm -> IO Motion
+  , collide :: (Float, Point 2 Float, LineSegment 2 () Float) 
+            -> (Float, Point 2 Float, LineSegment 2 () Float) 
+            -> Point 2 Float
   }
+
 
 type Motion = [Float] -- speed in radians per second at which joints should move
 

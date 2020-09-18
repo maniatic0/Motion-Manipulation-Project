@@ -26,3 +26,8 @@ printElement (Link  _ x) = "link  " ++ show x
 
 readMotion :: String -> Motion
 readMotion = map read . words
+
+
+
+
+

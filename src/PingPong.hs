@@ -9,4 +9,4 @@ import PingPong.Player.Stig
 import PingPong.Simulation
 
 main :: IO ()
-main = play stig msWavy
+main = play msWavy stig

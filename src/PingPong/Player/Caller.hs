@@ -10,7 +10,7 @@ import PingPong.Player
 import Graphics.Gloss (Color, makeColor)
 
 caller :: Player
-caller = Player callArm callFoot callAction
+caller = Player callArm callFoot callAction noCollide
 
 externalCommand :: String
 externalCommand = "echo \"hello world\""
@@ -43,3 +43,8 @@ callAction bs arm = do
   let motion = readMotion out
   return motion
 
+
+noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
+          -> (Float, Point 2 Float, LineSegment 2 () Float) 
+          -> Point 2 Float
+noCollide (t1, p1, s1) (t2, p2, s2) = p2

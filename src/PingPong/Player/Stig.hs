@@ -100,7 +100,7 @@ pointLineSegmentProjectionNormalizedFactor p l
         isDegenerate = wNorm == 0
         res = ((p ^. vector) `dot` w) / (wNorm * wNorm)
 
-
+-- | Checks if a point was intersected by a moving line. It returns the time of intersection 
 pointMovingLineCollision :: (Num r, Floating r, Ord r, Show r) => Point 2 r -> (r, LineSegment 2 () r) -> (r, LineSegment 2 () r) -> Maybe r
 pointMovingLineCollision p (t0, l0) (t1, l1) 
     = case possible of

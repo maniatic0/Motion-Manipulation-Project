@@ -101,7 +101,7 @@ pointLineSegmentProjectionNormalizedFactor p l
         res = ((p ^. vector) `dot` w) / (wNorm * wNorm)
 
 -- | Checks if a point was intersected by a moving line. It returns the time of intersection 
-pointMovingLineInterception :: (Num r, Floating r, Ord r, Show r) => Point 2 r -> LineSegment 2 () r -> LineSegment 2 () r -> Maybe r
+pointMovingLineInterception :: (Num r, Floating r, Ord r) => Point 2 r -> LineSegment 2 () r -> LineSegment 2 () r -> Maybe r
 pointMovingLineInterception p l0 l1 
     = case possible of
         Nothing -> Nothing -- No solution
@@ -133,6 +133,40 @@ pointMovingLineInterception p l0 l1
         res = case ts of
                 [] ->  Nothing -- No solution
                 _ -> Just $ minimum ts -- Minimum Valid Time
+
+-- | Move a line by a vector
+moveLineByVector :: (Num r) => LineSegment 2 () r -> Vector 2 r-> LineSegment 2 () r
+moveLineByVector l v = res 
+    where
+        p0I = l ^. (start . core . vector)
+        p0F = l ^. (end . core . vector)
+        p1I = p0I ^+^ v
+        p1F = p0F ^+^ v
+        res = ClosedLineSegment ((origin & vector .~ p1I) :+ ()) ((origin & vector .~ p1F) :+ ())
+
+-- | Interception Info
+data InterceptionInfo r = InterceptionInfo {
+    -- | Time of Interception
+    time :: r, 
+    -- | Point where interception happened
+    point :: Point 2 r
+    } deriving (Show)
+
+-- | Check for interception between a moving point and a moving line
+movingPointMovingLineInterception :: (Num r, Floating r, Ord r) => (Point 2 r, LineSegment 2 () r) -> (Point 2 r, LineSegment 2 () r) -> Maybe (InterceptionInfo r)
+movingPointMovingLineInterception (p0, l0) (p1, l1)
+    = case tRaw of
+        Nothing -> Nothing -- No Collision
+        Just _ -> res
+    where
+        pI = p0 ^. vector
+        pF = p1 ^. vector
+        pd = pF ^-^ pI
+        lF = moveLineByVector l1 (negated pd)
+        tRaw = pointMovingLineInterception p0 l0 lF
+        t = fromJust tRaw
+        c = lerp t pF pI
+        res = Just $ InterceptionInfo t (origin & vector .~ c)
 
 -- End of Geometry Helpers
 
@@ -230,7 +264,12 @@ armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
 stigCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
             -> (Float, Point 2 Float, LineSegment 2 () Float) 
             -> Point 2 Float
-stigCollide _ _ = Point2 0.0 0.0
+stigCollide (t0, p0, l0) (t1, p1, l1) 
+    = case interception of
+        Nothing -> p1
+        Just (InterceptionInfo t c) -> c
+    where 
+        interception = movingPointMovingLineInterception (p0, l0) (p1, l1)
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm = 

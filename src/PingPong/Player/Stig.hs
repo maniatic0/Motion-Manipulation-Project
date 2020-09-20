@@ -101,8 +101,8 @@ pointLineSegmentProjectionNormalizedFactor p l
         res = ((p ^. vector) `dot` w) / (wNorm * wNorm)
 
 -- | Checks if a point was intersected by a moving line. It returns the time of intersection 
-pointMovingLineCollision :: (Num r, Floating r, Ord r, Show r) => Point 2 r -> (r, LineSegment 2 () r) -> (r, LineSegment 2 () r) -> Maybe r
-pointMovingLineCollision p (t0, l0) (t1, l1) 
+pointMovingLineInterception :: (Num r, Floating r, Ord r, Show r) => Point 2 r -> LineSegment 2 () r -> LineSegment 2 () r -> Maybe r
+pointMovingLineInterception p l0 l1 
     = case possible of
         Nothing -> Nothing -- No solution
         Just _ -> res
@@ -132,7 +132,7 @@ pointMovingLineCollision p (t0, l0) (t1, l1)
                 a = pointLineSegmentProjectionNormalizedFactor p (ClosedLineSegment ((origin & vector .~ p0) :+ ()) ((origin & vector .~ p1) :+ ()))
         res = case ts of
                 [] ->  Nothing -- No solution
-                _ -> Just (t0 + (t1-t0) * minimum ts) -- Minimum Valid Time
+                _ -> Just $ minimum ts -- Minimum Valid Time
 
 -- End of Geometry Helpers
 

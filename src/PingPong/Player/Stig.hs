@@ -168,6 +168,15 @@ movingPointMovingLineInterception (p0, l0) (p1, l1)
         c = lerp t pF pI
         res = Just $ InterceptionInfo t (origin & vector .~ c)
 
+-- | Reflect a direction vector againt a normal vector (it must be normalized)
+reflect :: (Num r, Floating r, Ord r) => Vector 2 r -> Vector 2 r -> Vector 2 r
+reflect d n 
+    | normCheck == 1 || normCheck == 0 = r
+    | otherwise = error "Normal is not zero or normalized"
+    where 
+        r = d ^-^ n ^* (2 * dot d n)
+        normCheck = globalThreshold 0 $ globalThreshold 1 (norm n) 
+
 -- End of Geometry Helpers
 
 -- Simulation Helpers
@@ -261,15 +270,53 @@ armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
 
 
 -- | Calculates a linear collision between a point and line
-stigCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
-            -> (Float, Point 2 Float, LineSegment 2 () Float) 
-            -> Point 2 Float
+stigCollide :: (Num r, Floating r, Ord r) => (r, Point 2 r, LineSegment 2 () r) 
+            -> (r, Point 2 r, LineSegment 2 () r) 
+            -> Point 2 r
 stigCollide (t0, p0, l0) (t1, p1, l1) 
-    = case interception of
+    | dt <= 0 = p1 -- Negative time or dt = 0
+    | otherwise = case interceptionMaybe of
         Nothing -> p1
-        Just (InterceptionInfo t c) -> c
-    where 
-        interception = movingPointMovingLineInterception (p0, l0) (p1, l1)
+        Just _ -> pCol
+    where
+        dt = globalThreshold 0 $ t1 - t0
+        invDt = 1 / dt
+        -- Interception Info
+        interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
+        interception = fromJust interceptionMaybe
+        tc = time interception
+        pc = point interception
+        -- Point Info
+        pI = p0 ^. vector
+        pF = p1 ^. vector
+        pd = pF ^-^ pI 
+        pv = pd ^* invDt
+        -- Line Start Point Info
+        p0I = l0 ^. (start . core . vector)
+        p0F = l1 ^. (start . core . vector)
+        p0d = p0F ^-^ p0I
+        p0v = p0d ^* invDt
+        -- Line End Point Info
+        p1I = l0 ^. (end . core . vector)
+        p1F = l1 ^. (end . core . vector)
+        p1d = p1F ^-^ p1I
+        p1v = p1d ^* invDt
+        -- Line at Collision
+        p0c = lerp tc p0F p0I
+        p1c = lerp tc p1F p1I
+        a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
+        lcv = lerp a p1v p0v -- Interpolated line velocity
+        lcDir = p1c ^-^ p0c
+        lcNorm =  globalThreshold 0 $ norm lcDir
+        lcDirNormalized = lcDir ^* lcNorm
+        -- Collision
+        halfVectorUnNormalized = pv ^+^ lcv
+        halfNorm = globalThreshold 0 $ norm halfVectorUnNormalized
+        halfVector = bool halfVectorUnNormalized (halfVectorUnNormalized ^* (1/halfNorm)) (halfNorm > 0) -- Normalize Half Vector if possible
+        vd = pv ^-^ lcv -- Difference of velocities
+        rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
+        cvd = rVd ^+^ lcv -- Collision Velocity Direction
+        pCol = pc .+^ (cvd ^* (t1 - tc))
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm = 

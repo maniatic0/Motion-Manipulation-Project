@@ -201,6 +201,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
     interception = fromJust interceptionMaybe
     tc = time interception
+    tcScaled = t0 + dt * tc -- To get it back into scale
     pc = point interception
     -- Point Info
     pI = p0 ^. vector
@@ -230,7 +231,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     vd = pv ^-^ lcv -- Difference of velocities
     rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
-    pCol = pc .+^ (cvd ^* (t1 - tc))
+    pCol = pc .+^ (cvd ^* (t1 - tcScaled))
 
 -- End of Geometry Helpers
 

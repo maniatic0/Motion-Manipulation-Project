@@ -225,7 +225,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
     lcv = lerp a p1v p0v -- Interpolated line velocity
     lcDir = p1c ^-^ p0c
-    (lcDirNormalized, lcNorm) =  normalizeVector lcDir
+    (lcDirNormalized, lcNorm) = normalizeVector lcDir
     -- Collision
     --halfVectorUnNormalized = pv ^+^ lcv
     --(halfVector, halfNorm) = normalizeVector halfVectorUnNormalized

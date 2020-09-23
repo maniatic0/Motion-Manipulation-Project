@@ -1,5 +1,5 @@
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig (stig) where
+module PingPong.Player.Stig (stig, test) where
 
 import Control.Lens
 import Data.Bool (bool)
@@ -168,13 +168,69 @@ movingPointMovingLineInterception (p0, l0) (p1, l1) =
     res = Just $ InterceptionInfo t (origin & vector .~ c)
 
 -- | Reflect a direction vector againt a normal vector (it must be normalized)
-reflect :: (Num r, Floating r, Ord r) => Vector 2 r -> Vector 2 r -> Vector 2 r
+reflect :: (Num r, Floating r, Ord r, Show r) => Vector 2 r -> Vector 2 r -> Vector 2 r
 reflect d n
   | normCheck == 1 || normCheck == 0 = r
-  | otherwise = error "Normal is not zero or normalized"
+  | otherwise = error ("Normal is not zero or normalized: " ++ show n ++ " with norm=" ++ show normCheck)
   where
     r = d ^-^ n ^* (2 * dot d n)
     normCheck = globalThreshold 0 $ globalThreshold 1 (norm n)
+
+-- | Normalize a vector and get its norm
+normalizeVector :: (Num r, Floating r, Ord r) => Vector 2 r -> (Vector 2 r, r)
+normalizeVector v = (n, len)
+  where
+    len = globalThreshold 0 $ norm v
+    n = bool (Vector2 0 0) (v ^* (1 / len)) (len > 0)
+
+-- | Calculates a linear collision between a point and line
+movingBallMovingLineCollide ::
+  (Num r, Floating r, Ord r, Show r) =>
+  (r, Point 2 r, LineSegment 2 () r) ->
+  (r, Point 2 r, LineSegment 2 () r) ->
+  Point 2 r
+movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
+  | dt <= 0 = p1 -- Negative time or dt = 0
+  | otherwise = case interceptionMaybe of
+    Nothing -> p1
+    Just _ -> pCol
+  where
+    dt = globalThreshold 0 $ t1 - t0
+    invDt = 1 / dt
+    -- Interception Info
+    interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
+    interception = fromJust interceptionMaybe
+    tc = time interception
+    pc = point interception
+    -- Point Info
+    pI = p0 ^. vector
+    pF = p1 ^. vector
+    pd = pF ^-^ pI
+    pv = pd ^* invDt
+    -- Line Start Point Info
+    p0I = l0 ^. (start . core . vector)
+    p0F = l1 ^. (start . core . vector)
+    p0d = p0F ^-^ p0I
+    p0v = p0d ^* invDt
+    -- Line End Point Info
+    p1I = l0 ^. (end . core . vector)
+    p1F = l1 ^. (end . core . vector)
+    p1d = p1F ^-^ p1I
+    p1v = p1d ^* invDt
+    -- Line at Collision
+    p0c = lerp tc p0F p0I
+    p1c = lerp tc p1F p1I
+    a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
+    lcv = lerp a p1v p0v -- Interpolated line velocity
+    lcDir = p1c ^-^ p0c
+    (lcDirNormalized, lcNorm) = normalizeVector lcDir
+    -- Collision
+    halfVectorUnNormalized = pv ^+^ lcv
+    (halfVector, halfNorm) = normalizeVector halfVectorUnNormalized
+    vd = pv ^-^ lcv -- Difference of velocities
+    rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
+    cvd = rVd ^+^ lcv -- Collision Velocity Direction
+    pCol = pc .+^ (cvd ^* (t1 - tc))
 
 -- End of Geometry Helpers
 
@@ -268,56 +324,44 @@ armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
     g = globalThreshold 0.0
     f = deltaAngle . g
 
--- | Calculates a linear collision between a point and line
 stigCollide ::
-  (Num r, Floating r, Ord r) =>
+  (Num r, Floating r, Ord r, Eq r, Show r) =>
   (r, Point 2 r, LineSegment 2 () r) ->
   (r, Point 2 r, LineSegment 2 () r) ->
   Point 2 r
-stigCollide (t0, p0, l0) (t1, p1, l1)
-  | dt <= 0 = p1 -- Negative time or dt = 0
-  | otherwise = case interceptionMaybe of
-    Nothing -> p1
-    Just _ -> pCol
+stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLineCollide completeCheck
   where
-    dt = globalThreshold 0 $ t1 - t0
-    invDt = 1 / dt
-    -- Interception Info
-    interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
-    interception = fromJust interceptionMaybe
-    tc = time interception
-    pc = point interception
-    -- Point Info
-    pI = p0 ^. vector
-    pF = p1 ^. vector
-    pd = pF ^-^ pI
-    pv = pd ^* invDt
-    -- Line Start Point Info
-    p0I = l0 ^. (start . core . vector)
-    p0F = l1 ^. (start . core . vector)
-    p0d = p0F ^-^ p0I
-    p0v = p0d ^* invDt
-    -- Line End Point Info
-    p1I = l0 ^. (end . core . vector)
-    p1F = l1 ^. (end . core . vector)
-    p1d = p1F ^-^ p1I
-    p1v = p1d ^* invDt
-    -- Line at Collision
-    p0c = lerp tc p0F p0I
-    p1c = lerp tc p1F p1I
-    a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
-    lcv = lerp a p1v p0v -- Interpolated line velocity
-    lcDir = p1c ^-^ p0c
-    lcNorm = globalThreshold 0 $ norm lcDir
-    lcDirNormalized = lcDir ^* lcNorm
-    -- Collision
-    halfVectorUnNormalized = pv ^+^ lcv
-    halfNorm = globalThreshold 0 $ norm halfVectorUnNormalized
-    halfVector = bool halfVectorUnNormalized (halfVectorUnNormalized ^* (1 / halfNorm)) (halfNorm > 0) -- Normalize Half Vector if possible
-    vd = pv ^-^ lcv -- Difference of velocities
-    rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
-    cvd = rVd ^+^ lcv -- Collision Velocity Direction
-    pCol = pc .+^ (cvd ^* (t1 - tc))
+
+    generateTestState :: (Num r, Floating r, Ord r) => r -> (r, r) -> (r, r) -> (r, r) -> (r, Point 2 r, LineSegment 2 () r)
+    generateTestState t (px, py) (pl0x, pl0y) (pl1x, pl1y) = (t, Point2 px py, ClosedLineSegment (Point2 pl0x pl0y :+ ()) (Point2 pl1x pl1y :+ ()))
+    
+    testCases = [
+      (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (0, 0) (1, -1) (1, 1)),
+      (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (2, 0) (1, -1) (1, 1)),
+      (Point2 (-1) 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (1, 0) (0, -1) (0, 1)),
+      (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
+      (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1))
+      ]
+
+    checkCollision :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> (Bool, Diff (Point 2) r, Point 2 r)
+    checkCollision (ans, s1, s2) = (diffX == 0 && diffY == 0, diff, c)
+      where
+        c = movingBallMovingLineCollide s1 s2
+        diff = c .-. ans
+        diffX = globalThreshold 0 $ abs $ view xComponent diff
+        diffY = globalThreshold 0 $ abs $ view yComponent diff
+
+    performTest :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> Bool
+    performTest testCase@(ans, s1, s2) = bool (error showError) True correct
+      where
+        (correct, diff, p) = checkCollision testCase
+        showError = "Expected " ++ show ans ++ " but got " ++ show p ++ " with Diff " ++ show diff
+
+    completeCheck = all performTest testCases    
+  
+test 
+  = stigCollide (0, Point2 0.3 1.0, ClosedLineSegment (Point2 0.1 2.1 :+ ()) (Point2 (-0.5) 0.9 :+ ())) 
+    (1, Point2 1.2 0.8, ClosedLineSegment (Point2 (-0.2) 2.2 :+ ()) (Point2 (-0.3) 1.1 :+ ()))
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm =

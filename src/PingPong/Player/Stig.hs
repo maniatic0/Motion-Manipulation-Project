@@ -12,8 +12,6 @@ import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
 
-import Debug.Trace
-
 -- Geometry Helpers
 
 -- | Threshold function
@@ -176,7 +174,7 @@ reflect d n
   | normCheck == 1 || normCheck == 0 = r
   | otherwise = error ("Normal is not zero or normalized: " ++ show n ++ " with norm=" ++ show normCheck)
   where
-    r = d ^-^ n ^* (2 * dot d n)
+    r = n ^* (2 * dot d n) ^-^ d
     normCheck = globalThreshold 0 $ globalThreshold 1 (norm n)
 
 -- | Normalize a vector and get its norm
@@ -205,7 +203,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     interception = fromJust interceptionMaybe
     tc = time interception
     tcScaled = t0 + dt * tc -- To get it back into scale
-    pc = trace ("Interception " ++ show interception ++ " Scaled Time " ++ show tcScaled) (point interception)
+    pc = point interception
     -- Point Info
     pI = p0 ^. vector
     pF = p1 ^. vector
@@ -227,10 +225,10 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
     lcv = lerp a p1v p0v -- Interpolated line velocity
     lcDir = p1c ^-^ p0c
-    (lcDirNormalized, lcNorm) = trace ("Col Line " ++ show p0c ++ " to " ++ show p1c ++ " at " ++ show a) $ normalizeVector lcDir
+    (lcDirNormalized, lcNorm) =  normalizeVector lcDir
     -- Collision
-    halfVectorUnNormalized = pv ^+^ lcv
-    (halfVector, halfNorm) = normalizeVector halfVectorUnNormalized
+    --halfVectorUnNormalized = pv ^+^ lcv
+    --(halfVector, halfNorm) = normalizeVector halfVectorUnNormalized
     vd = pv ^-^ lcv -- Difference of velocities
     --rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
@@ -336,16 +334,15 @@ stigCollide ::
   Point 2 r
 stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLineCollide completeCheck
   where
-
     generateTestState :: (Num r, Floating r, Ord r) => r -> (r, r) -> (r, r) -> (r, r) -> (r, Point 2 r, LineSegment 2 () r)
     generateTestState t (px, py) (pl0x, pl0y) (pl1x, pl1y) = (t, Point2 px py, ClosedLineSegment (Point2 pl0x pl0y :+ ()) (Point2 pl1x pl1y :+ ()))
-    
-    testCases = [
-      (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (0, 0) (1, -1) (1, 1)),
-      (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (2, 0) (1, -1) (1, 1)),
-      (Point2 (-1) 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (1, 0) (0, -1) (0, 1)),
-      (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
-      (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1))
+
+    testCases =
+      [ (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (0, 0) (1, -1) (1, 1)),
+        (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (2, 0) (1, -1) (1, 1)),
+        (Point2 (-1) 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (1, 0) (0, -1) (0, 1)),
+        (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
+        (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1))
       ]
 
     checkCollision :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> (Bool, Diff (Point 2) r, Point 2 r)
@@ -360,15 +357,21 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLin
     performTest testCase@(ans, s1, s2) = bool (error showError) True correct
       where
         (correct, diff, p) = checkCollision testCase
-        showError 
-          = "Expected " ++ show ans ++ " but got " 
-            ++ show p ++ " with Diff " ++ show diff
-            ++ " \n\tFor case:\n\t" ++ show s1 ++ "\n\t->\n\t" ++ show s2
+        showError =
+          "Expected " ++ show ans ++ " but got "
+            ++ show p
+            ++ " with Diff "
+            ++ show diff
+            ++ " \n\tFor case:\n\t"
+            ++ show s1
+            ++ "\n\t->\n\t"
+            ++ show s2
 
-    completeCheck = all performTest testCases    
-  
-test 
-  = stigCollide (0, Point2 0.3 1.0, ClosedLineSegment (Point2 0.1 2.1 :+ ()) (Point2 (-0.5) 0.9 :+ ())) 
+    completeCheck = all performTest testCases
+
+test =
+  stigCollide
+    (0, Point2 0.3 1.0, ClosedLineSegment (Point2 0.1 2.1 :+ ()) (Point2 (-0.5) 0.9 :+ ()))
     (1, Point2 1.2 0.8, ClosedLineSegment (Point2 (-0.2) 2.2 :+ ()) (Point2 (-0.3) 1.1 :+ ()))
 
 stigAction :: BallState -> Arm -> IO Motion

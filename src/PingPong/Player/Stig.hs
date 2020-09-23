@@ -1,5 +1,5 @@
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig (stig, test) where
+module PingPong.Player.Stig (stig) where
 
 import Control.Lens
 import Data.Bool (bool)
@@ -342,7 +342,8 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLin
         (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (2, 0) (1, -1) (1, 1)),
         (Point2 (-1) 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (1, 0) (0, -1) (0, 1)),
         (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
-        (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1))
+        (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1)),
+        (Point2 1.2 0.8, generateTestState 0 (0.3, 1.0) (0.1, 2.1) (-0.5, 0.9), generateTestState 1 (1.2, 0.8) (-0.2, 2.2) (-0.3, 1.1))
       ]
 
     checkCollision :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> (Bool, Diff (Point 2) r, Point 2 r)
@@ -368,11 +369,6 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLin
             ++ show s2
 
     completeCheck = all performTest testCases
-
-test =
-  stigCollide
-    (0, Point2 0.3 1.0, ClosedLineSegment (Point2 0.1 2.1 :+ ()) (Point2 (-0.5) 0.9 :+ ()))
-    (1, Point2 1.2 0.8, ClosedLineSegment (Point2 (-0.2) 2.2 :+ ()) (Point2 (-0.3) 1.1 :+ ()))
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm =

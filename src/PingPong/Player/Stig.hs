@@ -12,6 +12,8 @@ import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
 
+import Debug.Trace
+
 -- Geometry Helpers
 
 -- | Threshold function
@@ -96,7 +98,8 @@ pointLineSegmentProjectionNormalizedFactor p l
     w = endPoint ^-^ startPoint
     wNorm = globalThreshold 0 $ norm w -- Included Threshold 0
     isDegenerate = wNorm == 0
-    res = ((p ^. vector) `dot` w) / (wNorm * wNorm)
+    c = p ^. vector
+    res = ((c ^-^ startPoint) `dot` w) / (wNorm * wNorm)
 
 -- | Checks if a point was intersected by a moving line. It returns the time of intersection
 pointMovingLineInterception :: (Num r, Floating r, Ord r) => Point 2 r -> LineSegment 2 () r -> LineSegment 2 () r -> Maybe r
@@ -202,7 +205,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     interception = fromJust interceptionMaybe
     tc = time interception
     tcScaled = t0 + dt * tc -- To get it back into scale
-    pc = point interception
+    pc = trace ("Interception " ++ show interception ++ " Scaled Time " ++ show tcScaled) (point interception)
     -- Point Info
     pI = p0 ^. vector
     pF = p1 ^. vector
@@ -224,12 +227,13 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     a = pointLineSegmentProjectionNormalizedFactor pc (ClosedLineSegment ((origin & vector .~ p0c) :+ ()) ((origin & vector .~ p1c) :+ ()))
     lcv = lerp a p1v p0v -- Interpolated line velocity
     lcDir = p1c ^-^ p0c
-    (lcDirNormalized, lcNorm) = normalizeVector lcDir
+    (lcDirNormalized, lcNorm) = trace ("Col Line " ++ show p0c ++ " to " ++ show p1c ++ " at " ++ show a) $ normalizeVector lcDir
     -- Collision
     halfVectorUnNormalized = pv ^+^ lcv
     (halfVector, halfNorm) = normalizeVector halfVectorUnNormalized
     vd = pv ^-^ lcv -- Difference of velocities
-    rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
+    --rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
+    rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
     pCol = pc .+^ (cvd ^* (t1 - tcScaled))
 
@@ -356,7 +360,10 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLin
     performTest testCase@(ans, s1, s2) = bool (error showError) True correct
       where
         (correct, diff, p) = checkCollision testCase
-        showError = "Expected " ++ show ans ++ " but got " ++ show p ++ " with Diff " ++ show diff
+        showError 
+          = "Expected " ++ show ans ++ " but got " 
+            ++ show p ++ " with Diff " ++ show diff
+            ++ " \n\tFor case:\n\t" ++ show s1 ++ "\n\t->\n\t" ++ show s2
 
     completeCheck = all performTest testCases    
   

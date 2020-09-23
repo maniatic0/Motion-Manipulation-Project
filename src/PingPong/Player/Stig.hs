@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- By Christian Oliveros and Minmin Chen
 module PingPong.Player.Stig (stig) where
 
@@ -328,12 +330,14 @@ armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
     f = deltaAngle . g
 
 stigCollide ::
+  forall r.
   (Num r, Floating r, Ord r, Eq r, Show r) =>
   (r, Point 2 r, LineSegment 2 () r) ->
   (r, Point 2 r, LineSegment 2 () r) ->
   Point 2 r
-stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLineCollide completeCheck
+stigCollide = bool (error "Stig Collide Failed a Test Case") f completeCheck
   where
+    f = movingBallMovingLineCollide
     generateTestState :: (Num r, Floating r, Ord r) => r -> (r, r) -> (r, r) -> (r, r) -> (r, Point 2 r, LineSegment 2 () r)
     generateTestState t (px, py) (pl0x, pl0y) (pl1x, pl1y) = (t, Point2 px py, ClosedLineSegment (Point2 pl0x pl0y :+ ()) (Point2 pl1x pl1y :+ ()))
 
@@ -349,7 +353,7 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") movingBallMovingLin
     checkCollision :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> (Bool, Diff (Point 2) r, Point 2 r)
     checkCollision (ans, s1, s2) = (diffX == 0 && diffY == 0, diff, c)
       where
-        c = movingBallMovingLineCollide s1 s2
+        c = f s1 s2
         diff = c .-. ans
         diffX = globalThreshold 0 $ abs $ view xComponent diff
         diffY = globalThreshold 0 $ abs $ view yComponent diff

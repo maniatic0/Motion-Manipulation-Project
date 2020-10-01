@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig (stig) where
+module PingPong.Player.Stig (stig, test) where
 
 import Control.Lens
 import Data.Bool (bool)
@@ -13,6 +13,8 @@ import Data.Maybe
 import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
+
+import Debug.Trace
 
 -- Geometry Helpers
 
@@ -203,7 +205,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     -- Interception Info
     interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
     interception = fromJust interceptionMaybe
-    tc = time interception
+    tc = trace (show interception) time interception
     tcScaled = t0 + dt * tc -- To get it back into scale
     pc = point interception
     -- Point Info
@@ -235,7 +237,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     --rVd = reflect vd $ bool halfVector lcDirNormalized (lcNorm > 0) -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
-    pCol = pc .+^ (cvd ^* (t1 - tcScaled))
+    pCol = trace (show pc ++ " " ++ show lcv ++ " " ++ show cvd ++ " " ++ show vd ++ " " ++ show rVd ++ " " ++ show tcScaled ) $ pc .+^ (cvd ^* (t1 - tcScaled))
 
 -- End of Geometry Helpers
 
@@ -343,6 +345,7 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") f completeCheck
 
     testCases =
       [ (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (0, 0) (1, -1) (1, 1)),
+        (Point2 0 2, generateTestState 0 (0, 0) (0, 0) (1, 0), generateTestState 1 (0, 0) (0, 1) (1, 1)),
         (Point2 0 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (2, 0) (1, -1) (1, 1)),
         (Point2 (-1) 0, generateTestState 0 (0, 0) (1, -1) (1, 1), generateTestState 1 (1, 0) (0, -1) (0, 1)),
         (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
@@ -373,6 +376,8 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") f completeCheck
             ++ show s2
 
     completeCheck = all performTest testCases
+
+test = stigCollide (0, Point2 0 0, ClosedLineSegment (Point2 0 0 :+ ()) (Point2 1 0 :+ ())) (1, Point2 0 0, ClosedLineSegment (Point2 1 0 :+ ()) (Point2 1 0 :+ ()))
 
 stigAction :: BallState -> Arm -> IO Motion
 stigAction bs arm =

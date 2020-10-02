@@ -23,12 +23,15 @@ data BallState = BallState
   }
 
 data Player = Player 
-  { arm     :: Arm
+  { name    :: String  
+  , arm     :: Arm
   , foot    :: Float
   , action  :: BallState -> Arm -> IO Motion
   , collide :: (Float, Point 2 Float, LineSegment 2 () Float) 
             -> (Float, Point 2 Float, LineSegment 2 () Float) 
             -> Point 2 Float
+  , planPnt :: Float -> Arm -> Point 2 Float -> [Float]
+  , planSeg :: Float -> Arm -> LineSegment 2 () Float -> [Float]
   }
 
 

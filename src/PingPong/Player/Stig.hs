@@ -285,7 +285,15 @@ applyMotionLimits = map f
 
 -- | Stig's player
 stig :: Player
-stig = Player stigArm stigFoot stigAction stigCollide
+stig = Player 
+  { name    = "Stig"
+  , arm     = stigArm
+  , foot    = stigFoot
+  , action  = stigAction
+  , collide = stigCollide
+  , planPnt = const $ const $ const [0]
+  , planSeg = const $ const $ const [0]
+  }     
 
 paleBlue :: Color
 paleBlue = makeColor 0.5 0.5 0.6 1

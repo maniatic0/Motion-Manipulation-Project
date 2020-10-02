@@ -1,8 +1,6 @@
 module Main where
 
-import Data.Geometry.PlanarSubdivision.Dynamic
-
-import qualified Force as F
+import qualified PingPong as P
 
 main :: IO ()
-main = F.main
+main = P.main

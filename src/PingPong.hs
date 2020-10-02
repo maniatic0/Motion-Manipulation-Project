@@ -1,12 +1,20 @@
 module PingPong where
 
 import PingPong.Model
+
+--import PingPong.Simulation.Recording
+import PingPong.Simulation.Realtime
+
 import PingPong.Player
 import PingPong.Player.MrStiff
 import PingPong.Player.MsWavy
 import PingPong.Player.Caller
 import PingPong.Player.Stig
-import PingPong.Simulation
+
+
+
+players :: [Player]
+players = [mrStiff, msWavy, stig]
 
 main :: IO ()
-main = play msWavy stig
+main = play stig msWavy

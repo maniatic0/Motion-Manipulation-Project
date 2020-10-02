@@ -7,7 +7,7 @@ cabal-version: 1.12
 -- hash: a3f65e9f43ed693610823ef12f129ce4071b36055aea8e8e25f961aa37911cae
 
 name:           pingpong
-version:        0.1.1.0
+version:        0.1.2.1
 description:    Please see the README on GitHub at <https://github.com/githubuser/test#readme>
 homepage:       https://github.com/githubuser/test#readme
 bug-reports:    https://github.com/githubuser/test/issues
@@ -27,15 +27,24 @@ source-repository head
 
 library
   exposed-modules:
-      PingPong
+    PingPong
   other-modules:
-      Paths_test
+    Convert
+    PingPong.Draw
+    PingPong.Model
+    PingPong.Player
+    PingPong.Player.Caller
+    PingPong.Player.MrStiff
+    PingPong.Player.MsWavy
+    PingPong.Simulation  
   hs-source-dirs:
       src
   build-depends:
       base >=4.7 && <5
     , hgeometry >= 0.11
     , hgeometry-combinatorial >= 0.11
+    , JuicyPixels
+    , FontyFruity
     , Rasterific
     , gloss
     , vector
@@ -43,6 +52,7 @@ library
     , containers
     , vinyl
     , process
+    , directory
   default-language: Haskell2010
   default-extensions: TypeFamilies
                     , GADTs
@@ -75,8 +85,6 @@ library
 
 executable pingpong-exe
   main-is: Main.hs
-  other-modules:
-      Paths_test
   hs-source-dirs:
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -88,8 +96,6 @@ executable pingpong-exe
 test-suite pingpong-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
-  other-modules:
-      Paths_test
   hs-source-dirs:
       pingpong
   ghc-options: -threaded -rtsopts -with-rtsopts=-N

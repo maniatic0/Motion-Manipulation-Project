@@ -3,10 +3,6 @@ module PingPong.Simulation where
 import PingPong.Model
 import PingPong.Draw
 
-import Graphics.Gloss (Display (InWindow), Picture, Color, white)
-import Graphics.Gloss.Interface.IO.Simulate (simulateIO)
-import Graphics.Gloss.Data.ViewPort
-
 import Data.Geometry hiding (init, head)
 import Data.Geometry.Matrix
 import Data.Geometry.Transformation
@@ -21,33 +17,15 @@ import Data.Vinyl.CoRec
 
 
 
-windowDisplay :: Display
-windowDisplay = InWindow "Window" (1600, 800) (100, 100)
-
 
 
 startBall :: BallState
 startBall = BallState (Point2 0 1) (Vector2 0.88 0)
 
-play :: Player -> Player -> IO ()
-play ip1 ip2 = simulateIO
-  windowDisplay
-  white
-  simulationRate
-  initialState
-  (return . center . drawState)
-  update
-  where
-    simulationRate :: Int
-    simulationRate = 50
-
-    initialState :: State
-    initialState = State ip1 ip2 startBall
-
 -- updating
 
-update :: ViewPort -> Float -> State -> IO State
-update _ f st = do
+update :: Float -> State -> IO State
+update f st = do
   let op1 = p1 st
       op2 = p2 st
       ob  = ball st

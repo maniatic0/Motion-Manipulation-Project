@@ -7,7 +7,11 @@ import Data.Geometry
 import Graphics.Gloss (Color, makeColor)
 
 mrStiff :: Player
-mrStiff = Player stiffArm stiffFoot noAction noCollide
+mrStiff = defaultPlayer
+  { name = "Mr Stiff"
+  , arm = stiffArm
+  , foot = stiffFoot
+  }
 
 paleBlue :: Color
 paleBlue = makeColor 0.5 0.5 0.6 1
@@ -26,12 +30,3 @@ stiffArm = [ Link paleBlue 0.4
 stiffFoot :: Float
 stiffFoot = 1.3
 
-
-
-noAction :: BallState -> Arm -> IO Motion
-noAction _ _ = return [0, 0]
-
-noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> Point 2 Float
-noCollide (t1, p1, s1) (t2, p2, s2) = p2

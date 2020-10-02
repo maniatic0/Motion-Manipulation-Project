@@ -1,0 +1,24 @@
+
+course:
+part on many topics / read and summarize articles
+"primary literature/sources"
+- part feeding
+- conf space
+- grasping
+- modular robotics
+"practical" part: kinematics
+- program a tennis arm
+
+make:
+guide "how to make pretty paper"
+system to play tennis
+
+
+
+
+
+
+to do for implementation
+
+- static version based on Rasterific instead of Gloss
+- game logic (turns, points, etc.)

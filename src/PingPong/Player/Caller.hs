@@ -10,7 +10,11 @@ import PingPong.Player
 import Graphics.Gloss (Color, makeColor)
 
 caller :: Player
-caller = Player callArm callFoot callAction noCollide
+caller = defaultPlayer
+  { arm = callArm
+  , foot = callFoot
+  , action = callAction
+  }
 
 externalCommand :: String
 externalCommand = "echo \"hello world\""

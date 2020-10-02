@@ -9,7 +9,13 @@ import PingPong.Player
 import Graphics.Gloss (Color, makeColor)
 
 msWavy :: Player
-msWavy = Player wavyArm wavyFoot wavyAction noCollide
+msWavy = defaultPlayer
+  { name = "Ms Wavy"
+  , arm = wavyArm
+  , foot = wavyFoot
+  , action = wavyAction
+  , collide = noCollide
+  }
 
 gradient :: Float -> Color
 gradient x = makeColor x 0.8 0.2 1
@@ -39,8 +45,3 @@ wavyAction bs _ = return $ let t = view xCoord $ loc bs
                      ,  0.5 * cos (2.5 * t)
                      ]
 
-
-noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> Point 2 Float
-noCollide (t1, p1, s1) (t2, p2, s2) = p2                     

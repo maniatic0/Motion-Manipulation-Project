@@ -238,6 +238,14 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
     pCol = pc .+^ (cvd ^* (t1 - tcScaled))
+    
+-- | Calculate the forward kinematic matrix for a joint / link
+calFwdMatrix :: Element -> Element -> [[Float]]
+calFwdMatrix (Joint _ a) (Link _ l) =
+  [[cos a, -sin a, l * cos a],
+   [sin a,  cos a, l * sin a],
+   [    0,      0,         1]]
+calFwdMatrix _ _ = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
 
 -- End of Geometry Helpers
 
@@ -280,6 +288,12 @@ applyMotionLimits :: Motion -> Motion
 applyMotionLimits = map f
   where
     f x = min motionLimit $ max (- motionLimit) x
+    
+-- | Simplify arm with adjacent joints or links
+simplifyArm :: Arm -> Arm
+simplifyArm (Joint color a1 : (Joint _ a2 : xs)) = (Joint color (a1 + a2)) : xs
+simplifyArm (Link color l1 : (Link _ l2 : xs)) = (Link color (l1 + l2)) : xs
+simplifyArm (x : xs) = x : simplifyArm xs
 
 -- End of Simulation Helpers
 

@@ -43,6 +43,7 @@ library
       base >=4.7 && <5
     , hgeometry >= 0.11
     , hgeometry-combinatorial >= 0.11
+    , matrix
     , JuicyPixels
     , FontyFruity
     , Rasterific

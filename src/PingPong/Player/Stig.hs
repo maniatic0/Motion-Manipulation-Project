@@ -14,6 +14,8 @@ import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
 
+import Data.Matrix
+
 -- import Debug.Trace
 
 -- Geometry Helpers

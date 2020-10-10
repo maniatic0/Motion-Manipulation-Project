@@ -20,5 +20,7 @@ system to play tennis
 
 to do for implementation
 
-- static version based on Rasterific instead of Gloss
 - game logic (turns, points, etc.)
+
+
+- remove almost-equal test?

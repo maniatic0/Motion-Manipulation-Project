@@ -18,11 +18,11 @@ printPoint :: Show r => Point 2 r -> String
 printPoint p = (show $ view xCoord p) ++ " " ++ (show $ view yCoord p)
   
 printArm :: Arm -> String
-printArm arm = "arm " ++ unwords (map printElement arm)
+printArm arm = unwords (map printElement arm)
 
 printElement :: Element -> String
 printElement (Joint _ x) = "joint " ++ show x
-printElement (Link  _ x) = "link  " ++ show x
+printElement (Link  _ x) = "link "  ++ show x
 
 readMotion :: String -> Motion
 readMotion = map read . words

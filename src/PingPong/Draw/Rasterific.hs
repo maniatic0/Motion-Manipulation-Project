@@ -98,7 +98,8 @@ drawArm a d b = drawArm' a $ map (center . playerTransform d b) $ evaluate a
     drawArm' (Joint j _ : rest) (p :     ps) = sequence_ [drawArm' rest ps, drawJoint p $ convertColor j]
     drawArm' _ _ = return ()
 
-playerTransform :: Float -> Bool -> Point 2 Float -> Point 2 Float
+playerTransform :: (IsTransformable g, NumType g ~ Float, Dimension g ~ 2) => Float -> Bool -> g -> g
+--playerTransform :: Float -> Bool -> Point 2 Float -> Point 2 Float
 --playerTransform :: (IsTransformable g, Num (NumType g), Dimension g ~ 2) => Float -> Bool -> g -> g
 playerTransform d True = translateBy $ Vector2 d 0
 playerTransform d False = scaleBy (Vector2 (-1) 1) . translateBy (Vector2 d 0)

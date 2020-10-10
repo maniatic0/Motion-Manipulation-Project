@@ -11,7 +11,19 @@ import Data.Geometry
 import Convert
 
 drawState :: State -> Picture
-drawState m = G.Pictures [drawStatic, drawPlayer (p1 m) True, drawPlayer (p2 m) False, drawBall $ ball m]
+drawState m = G.Pictures 
+  [ center $ G.Pictures [drawStatic, drawPlayer (p1 m) True, drawPlayer (p2 m) False, drawBall $ ball m]
+  , drawInfo m
+  ]
+
+drawInfo :: State -> Picture
+drawInfo s = G.Pictures
+  [ G.Translate (-580) (320) $ G.Scale 0.1 0.1 $ G.text $ (name $ p1 $ s) ++ " VS " ++ (name $ p2 $ s)
+  , G.Translate (-580) (300) $ G.Scale 0.1 0.1 $ G.text $ "time: " ++ (show $ (fromInteger $ floor $ 100 * time s) / 100)
+  , G.Translate (-580) (280) $ G.Scale 0.1 0.1 $ G.text $ "last hit: " ++ (show $ snd $ hit s)
+  ]
+
+
 
 center :: Picture -> Picture
 center = G.Scale 200 200 . G.Translate 0 (-1)

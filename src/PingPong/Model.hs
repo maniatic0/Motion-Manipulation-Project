@@ -41,9 +41,23 @@ type Motion = [Float] -- speed in radians per second at which joints should move
 
 
 data State = State
-  { p1, p2 :: Player
+  { time   :: Float -- time elapsed since the start of the game
   , ball   :: BallState
+  , hit    :: (Float, Int) -- time and index of last collision
+  , p1, p2 :: Player
+  , m1, m2 :: Motion -- current motion (until next frame)
   -- TODO: current score, whose turn is it, what was the last thing the ball hit
+  }
+
+defState :: State
+defState = State
+  { time = 0
+  , ball = BallState (Point2 0 1) (Vector2 1 0)
+  , hit  = (0, -1)
+  , p1   = undefined
+  , p2   = undefined
+  , m1   = undefined
+  , m2   = undefined
   }
 
 -- | Create an identity transformation.
@@ -95,7 +109,7 @@ room :: SimplePolygon () Float
 room = Data.Geometry.Polygon.fromPoints $ map (:+ ()) [Point2 (-3) 0, Point2 3 0, Point2 3 6, Point2 (-3) 6]
 
 table :: SimplePolygon () Float
-table = Data.Geometry.Polygon.fromPoints $ map (:+ ()) [Point2 (-1) 0.4, Point2 1 0.4, Point2 1 0.5, Point2 (-1) 0.5]
+table = Data.Geometry.Polygon.fromPoints $ map (:+ ()) [Point2 1 0.5, Point2 0 0.5, Point2 (-1) 0.5, Point2 (-1) 0.4, Point2 1 0.4]
 
 net :: LineSegment 2 () Float
 net = ClosedLineSegment (Point2 0 0.5 :+ ()) (Point2 0 0.6 :+ ())

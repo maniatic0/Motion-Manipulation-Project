@@ -14,7 +14,6 @@ import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
 
-import Data.Matrix
 
 -- import Debug.Trace
 
@@ -152,7 +151,7 @@ moveLineByVector l v = res
 -- | Interception Info
 data InterceptionInfo r = InterceptionInfo
   { -- | Time of Interception
-    time :: r,
+    interptTime :: r,
     -- | Point where interception happened
     point :: Point 2 r
   }
@@ -207,7 +206,7 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     -- Interception Info
     interceptionMaybe = movingPointMovingLineInterception (p0, l0) (p1, l1)
     interception = fromJust interceptionMaybe
-    tc = time interception
+    tc = interptTime interception
     tcScaled = t0 + dt * tc -- To get it back into scale
     pc = point interception
     -- Point Info
@@ -376,6 +375,7 @@ stigCollide = bool (error "Stig Collide Failed a Test Case") f completeCheck
         (Point2 1 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (2, 0) (0, -1) (2, 1)),
         (Point2 (-1) 1, generateTestState 0 (0, 0) (0, -1) (2, 1), generateTestState 1 (0, 0) (-2, -1) (0, 1)),
         (Point2 1.2 0.8, generateTestState 0 (0.3, 1.0) (0.1, 2.1) (-0.5, 0.9), generateTestState 1 (1.2, 0.8) (-0.2, 2.2) (-0.3, 1.1))
+        --(Point2 (-6) (-4), generateTestState 0 (-5, -5) (0, 1) (1, 0), generateTestState 1 (5, 7) (0, 1) (1, 0))
       ]
 
     checkCollision :: (Num r, Floating r, Ord r, Show r) => (Point 2 r, (r, Point 2 r, LineSegment 2 () r), (r, Point 2 r, LineSegment 2 () r)) -> (Bool, Diff (Point 2) r, Point 2 r)

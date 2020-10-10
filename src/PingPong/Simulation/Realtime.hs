@@ -8,21 +8,22 @@ import Graphics.Gloss (Display (InWindow), Picture, Color, white)
 import Graphics.Gloss.Interface.IO.Simulate (simulateIO)
 import Graphics.Gloss.Data.ViewPort
 
-play :: Player -> Player -> IO ()
-play ip1 ip2 = simulateIO
-  windowDisplay
-  white
-  simulationRate
-  initialState
-  (return . center . drawState)
-  (const update)
-  where
-    simulationRate :: Int
-    simulationRate = 50
-
-    initialState :: State
-    initialState = State ip1 ip2 startBall
+simulationRate :: Int
+simulationRate = 50
 
 windowDisplay :: Display
 windowDisplay = InWindow "Window" (1600, 800) (100, 100)
+
+
+play :: Player -> Player -> IO ()
+play ip1 ip2 = do
+  b <- startBall
+  let initialState = defState {p1 = ip1, p2 = ip2, ball = b}
+  simulateIO windowDisplay
+             white
+             simulationRate
+             initialState
+             (return . drawState)
+             (const update)
+    
 

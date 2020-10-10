@@ -22,20 +22,20 @@ frameRate :: Float
 frameRate = 50
 
 frameCount :: Int
-frameCount = 10 -- 00
+frameCount = round  $ 3 * 60 * frameRate -- 3 minutes (3 * 60)
 
 frameDuration :: Float
 frameDuration = 1 / frameRate
 
 play :: Player -> Player -> IO ()
 play ip1 ip2 = do
+  b <- startBall
+  let initialState = defState {p1 = ip1, p2 = ip2, ball = b}
   putStrLn $ "[" ++ name ip1 ++ " versus " ++ name ip2 ++ "]"
   Right font <- loadFontFile "Montserrat-Bold.ttf"
   pics <- record frameCount font initialState
   export pics (filter isAlphaNum (name ip1) ++ "-" ++ filter isAlphaNum (name ip2))
-  where
-    initialState :: State
-    initialState = State ip2 ip1 startBall
+    
 
 record :: Int -> Font -> State -> IO [Drawing PixelRGBA8 ()]
 record 0 _    _  = return []

@@ -31,3 +31,4 @@ cabal.project.local~
 
 ### Motion and Manipulation ###
 glut32.dll
+recording/

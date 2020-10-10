@@ -39,9 +39,9 @@ wavyFoot = 1.5
 
 wavyAction :: BallState -> Arm -> IO Motion
 wavyAction bs _ = return $ let t = view xCoord $ loc bs
-                  in [ -0.5 * sin (2.2 * t)
-                     , -0.5 * cos (2.3 * t)
-                     ,  0.5 * sin (2.4 * t)
-                     ,  0.5 * cos (2.5 * t)
+                  in [ -2 * sin (2.2 * t)
+                     , -2 * cos (2.3 * t)
+                     ,  2 * sin (2.4 * t)
+                     ,  2 * cos (2.5 * t)
                      ]
 

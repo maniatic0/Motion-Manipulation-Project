@@ -1,9 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig (stig) where
+module PingPong.Player.Stig --(stig) 
+  where
 
-import Control.Lens
+import Control.Lens ( (&), (^.), view, (.~) )
 import Data.Bool (bool)
 import Data.Ext
 import Data.Fixed (mod')
@@ -13,6 +14,10 @@ import Data.Maybe
 import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
+
+import GHC.Float
+
+import qualified  Numeric.LinearAlgebra.Data as Numerical
 
 
 -- import Debug.Trace
@@ -292,8 +297,9 @@ applyMotionLimits = map f
     
 -- | Simplify arm with adjacent joints or links
 simplifyArm :: Arm -> Arm
-simplifyArm (Joint color a1 : (Joint _ a2 : xs)) = (Joint color (a1 + a2)) : xs
-simplifyArm (Link color l1 : (Link _ l2 : xs)) = (Link color (l1 + l2)) : xs
+--simplifyArm (Joint color a1 : (Joint _ a2 : xs)) = (Joint color (a1 + a2)) : xs
+simplifyArm [] = []
+simplifyArm (Link color l1 : Link _ l2 : xs) = Link color (l1 + l2) : xs
 simplifyArm (x : xs) = x : simplifyArm xs
 
 -- End of Simulation Helpers
@@ -413,3 +419,113 @@ stigAction bs arm =
         toRest = armToStigRestMotion arm
         motion = bool [1, -1, 1, -1] toRest (xdir > 0)
      in applyMotionLimits motion -- Velocity limits
+
+-- Inverse and Forward Kinematics
+
+data ArmKinematicPart = ArmBase
+  {
+    footParam :: Numerical.R
+  }
+  | ArmJoint
+  {
+    translationParam :: Numerical.R
+  }
+  | ArmBat
+  {
+    translationParam :: Numerical.R
+  }
+  deriving (Show)
+
+type ArmKinematic = [ArmKinematicPart]
+
+-- | Goes from rough representation to a more refined one
+fromFootArmToArmKinematic :: Float -> Arm -> ArmKinematic
+fromFootArmToArmKinematic foot arm = ArmBase (float2Double foot) : processArm 0 arm
+    where 
+      processArm :: Numerical.R -> Arm -> ArmKinematic
+      processArm t [Link _ t2] = [ArmBat $ t + float2Double t2]
+      processArm t (Link _ t2 : as) = processArm (t + float2Double t2) as
+      processArm t (Joint _ _ : as) = ArmJoint t : processArm 0 as
+
+-- | Goes from rough representation to a more refined one. 
+-- As well, get the motion vector 
+getArmKinematicAndMotion :: Float -> Arm -> (ArmKinematic, Motion)
+getArmKinematicAndMotion foot arm 
+  = (fromFootArmToArmKinematic foot simpleArm, getCurrentJoints simpleArm)
+  where
+    simpleArm = simplifyArm arm
+
+-- | Converts a motion list to a vector of joint coordinates
+motionToJointVector :: Motion -> Numerical.Vector Numerical.R
+motionToJointVector m = Numerical.fromList $ map float2Double m 
+
+-- | Converts vector of joint coordinates to a motion list
+jointVectorToMotion :: Numerical.Vector Numerical.R -> Motion
+jointVectorToMotion v = map double2Float $ Numerical.toList v
+
+-- | Translation in the X axis matrix
+translateXTrans :: Numerical.R -> Numerical.Matrix Numerical.R
+translateXTrans t = 
+  Numerical.fromLists [[1, 0, t], [0, 1, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+
+-- | Translation in the X axis inverse matrix
+translateXInvTrans :: Numerical.R -> Numerical.Matrix Numerical.R
+translateXInvTrans t = 
+  Numerical.fromLists [[1, 0, -t], [0, 1, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+
+-- | Rotation matrix
+rotateTrans :: Numerical.R -> Numerical.Matrix Numerical.R
+rotateTrans a =
+  Numerical.fromLists [[c, -s, 0], [s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+  where
+    c = cos a
+    s = sin a
+
+-- | Rotation inverse matrix
+rotateInvTrans :: Numerical.R -> Numerical.Matrix Numerical.R
+rotateInvTrans a =
+  Numerical.fromLists [[c, s, 0], [-s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+  where
+    c = cos a
+    s = sin a
+
+data ArmKinematicPartMatrix = ArmBaseMatrix
+  {
+    footMatrix :: Numerical.Matrix Numerical.R
+  }
+  | ArmJointMatrix
+  {
+    translationMatrix :: Numerical.Matrix Numerical.R,
+    jointMatrix :: Numerical.Matrix Numerical.R
+  }
+  | ArmBatMatrix
+  {
+    batMatrix :: Numerical.Matrix Numerical.R
+  }
+  deriving (Show)
+
+type ArmKinematicMatrix = [ArmKinematicPartMatrix]
+
+-- | Calculate the transforms for forward kinematics
+applyForwardKinematicTrans :: 
+  ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
+applyForwardKinematicTrans arm v = toTrans arm motion
+  where
+    motion = Numerical.toList v :: [Numerical.R]
+
+    toTrans :: ArmKinematic -> [Numerical.R] -> ArmKinematicMatrix
+    toTrans (ArmBase t : as) js =  (ArmBaseMatrix $ translateXTrans t <> rotateTrans (pi / 2) ) : toTrans as js
+    toTrans (ArmJoint t : as) (j:js) =  ArmJointMatrix (translateXTrans t) (rotateTrans j) : toTrans as js
+    toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXTrans t]
+
+-- | Calculate the inverse transforms for forward kinematics
+applyForwardKinematicInvTrans :: 
+  ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
+applyForwardKinematicInvTrans arm v = reverse $ toTrans arm motion
+  where
+    motion = Numerical.toList v :: [Numerical.R]
+
+    toTrans :: ArmKinematic -> [Numerical.R] -> ArmKinematicMatrix
+    toTrans (ArmBase t : as) js =  (ArmBaseMatrix $ rotateInvTrans (pi / 2) <> translateXInvTrans t ) : toTrans as js
+    toTrans (ArmJoint t : as) (j:js) =  ArmJointMatrix (translateXInvTrans t) (rotateInvTrans j) : toTrans as js
+    toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXInvTrans t]

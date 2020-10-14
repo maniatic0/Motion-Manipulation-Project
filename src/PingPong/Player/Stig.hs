@@ -1,26 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig --(stig) 
+module PingPong.Player.Stig  --(stig)
   where
 
-import Control.Lens ( (&), (^.), view, (.~) )
+import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
 import Data.Ext
 import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Geometry.Vector.VectorFamilyPeano
 import Data.Maybe
-import Graphics.Gloss (Color, makeColor)
-import PingPong.Model
-import PingPong.Player
-
 --import Control.Monad.State.Lazy
 
 import GHC.Float
-
-import qualified  Numeric.LinearAlgebra as Numerical
-
+import Graphics.Gloss (Color, makeColor)
+import qualified Numeric.LinearAlgebra as Numerical
+import PingPong.Model
+import PingPong.Player
 
 -- import Debug.Trace
 
@@ -246,13 +243,14 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
     pCol = pc .+^ (cvd ^* (t1 - tcScaled))
-    
+
 -- | Calculate the forward kinematic matrix for a joint / link
 calFwdMatrix :: Element -> Element -> [[Float]]
 calFwdMatrix (Joint _ a) (Link _ l) =
-  [[cos a, -sin a, l * cos a],
-   [sin a,  cos a, l * sin a],
-   [    0,      0,         1]]
+  [ [cos a, - sin a, l * cos a],
+    [sin a, cos a, l * sin a],
+    [0, 0, 1]
+  ]
 calFwdMatrix _ _ = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
 
 -- End of Geometry Helpers
@@ -296,7 +294,7 @@ applyMotionLimits :: Motion -> Motion
 applyMotionLimits = map f
   where
     f x = min motionLimit $ max (- motionLimit) x
-    
+
 -- | Simplify arm with adjacent joints or links
 simplifyArm :: Arm -> Arm
 --simplifyArm (Joint color a1 : (Joint _ a2 : xs)) = (Joint color (a1 + a2)) : xs
@@ -424,18 +422,16 @@ stigAction bs arm =
 
 -- Inverse and Forward Kinematics
 
-data ArmKinematicPart = ArmBase
-  {
-    footParam :: Numerical.R
-  }
+data ArmKinematicPart
+  = ArmBase
+      { footParam :: Numerical.R
+      }
   | ArmJoint
-  {
-    translationParam :: Numerical.R
-  }
+      { translationParam :: Numerical.R
+      }
   | ArmBat
-  {
-    translationParam :: Numerical.R
-  }
+      { translationParam :: Numerical.R
+      }
   deriving (Show)
 
 type ArmKinematic = [ArmKinematicPart]
@@ -443,23 +439,23 @@ type ArmKinematic = [ArmKinematicPart]
 -- | Goes from rough representation to a more refined one
 fromFootArmToArmKinematic :: Float -> Arm -> ArmKinematic
 fromFootArmToArmKinematic foot arm = ArmBase (float2Double foot) : processArm 0 arm
-    where 
-      processArm :: Numerical.R -> Arm -> ArmKinematic
-      processArm t [Link _ t2] = [ArmBat $ t + float2Double t2]
-      processArm t (Link _ t2 : as) = processArm (t + float2Double t2) as
-      processArm t (Joint _ _ : as) = ArmJoint t : processArm 0 as
+  where
+    processArm :: Numerical.R -> Arm -> ArmKinematic
+    processArm t [Link _ t2] = [ArmBat $ t + float2Double t2]
+    processArm t (Link _ t2 : as) = processArm (t + float2Double t2) as
+    processArm t (Joint _ _ : as) = ArmJoint t : processArm 0 as
 
--- | Goes from rough representation to a more refined one. 
--- As well, get the motion vector 
+-- | Goes from rough representation to a more refined one.
+-- As well, get the motion vector
 getArmKinematicAndMotion :: Float -> Arm -> (ArmKinematic, Motion)
-getArmKinematicAndMotion foot arm 
-  = (fromFootArmToArmKinematic foot simpleArm, getCurrentJoints simpleArm)
+getArmKinematicAndMotion foot arm =
+  (fromFootArmToArmKinematic foot simpleArm, getCurrentJoints simpleArm)
   where
     simpleArm = simplifyArm arm
 
 -- | Converts a motion list to a vector of joint coordinates
 motionToJointVector :: Motion -> Numerical.Vector Numerical.R
-motionToJointVector m = Numerical.fromList $ map float2Double m 
+motionToJointVector m = Numerical.fromList $ map float2Double m
 
 -- | Converts vector of joint coordinates to a motion list
 jointVectorToMotion :: Numerical.Vector Numerical.R -> Motion
@@ -467,18 +463,18 @@ jointVectorToMotion v = map double2Float $ Numerical.toList v
 
 -- | Translation in the X axis matrix
 translateXTrans :: Numerical.R -> Numerical.Matrix Numerical.R
-translateXTrans t = 
+translateXTrans t =
   Numerical.fromLists [[1, 0, t], [0, 1, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
 
 -- | Translation in the X axis inverse matrix
 translateXInvTrans :: Numerical.R -> Numerical.Matrix Numerical.R
-translateXInvTrans t = 
-  Numerical.fromLists [[1, 0, -t], [0, 1, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+translateXInvTrans t =
+  Numerical.fromLists [[1, 0, - t], [0, 1, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
 
 -- | Rotation matrix
 rotateTrans :: Numerical.R -> Numerical.Matrix Numerical.R
 rotateTrans a =
-  Numerical.fromLists [[c, -s, 0], [s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+  Numerical.fromLists [[c, - s, 0], [s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
   where
     c = cos a
     s = sin a
@@ -486,7 +482,7 @@ rotateTrans a =
 -- | Rotation inverse matrix
 rotateInvTrans :: Numerical.R -> Numerical.Matrix Numerical.R
 rotateInvTrans a =
-  Numerical.fromLists [[c, s, 0], [-s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
+  Numerical.fromLists [[c, s, 0], [- s, c, 0], [0, 0, 1]] :: Numerical.Matrix Numerical.R
   where
     c = cos a
     s = sin a
@@ -495,22 +491,20 @@ rotateInvTrans a =
 homogeneousPoint :: Numerical.R -> Numerical.R -> Numerical.Vector Numerical.R
 homogeneousPoint x y = Numerical.fromList [x, y, 1]
 
-homogeneousIdent ::  Numerical.Matrix Numerical.R
+homogeneousIdent :: Numerical.Matrix Numerical.R
 homogeneousIdent = Numerical.ident 3
 
-data ArmKinematicPartMatrix = ArmBaseMatrix
-  {
-    footMatrix :: Numerical.Matrix Numerical.R
-  }
+data ArmKinematicPartMatrix
+  = ArmBaseMatrix
+      { footMatrix :: Numerical.Matrix Numerical.R
+      }
   | ArmJointMatrix
-  {
-    translationMatrix :: Numerical.Matrix Numerical.R,
-    jointMatrix :: Numerical.Matrix Numerical.R
-  }
+      { translationMatrix :: Numerical.Matrix Numerical.R,
+        jointMatrix :: Numerical.Matrix Numerical.R
+      }
   | ArmBatMatrix
-  {
-    batMatrix :: Numerical.Matrix Numerical.R
-  }
+      { batMatrix :: Numerical.Matrix Numerical.R
+      }
   deriving (Show)
 
 type ArmKinematicMatrix = [ArmKinematicPartMatrix]
@@ -528,36 +522,36 @@ getTransInv (ArmJointMatrix t r) = r <> t
 getTransInv (ArmBatMatrix t) = t
 
 -- | Calculate the transforms for forward kinematics
-applyForwardKinematicTrans :: 
+applyForwardKinematicTrans ::
   ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
 applyForwardKinematicTrans arm v = toTrans arm motion
   where
     motion = Numerical.toList v :: [Numerical.R]
 
     toTrans :: ArmKinematic -> [Numerical.R] -> ArmKinematicMatrix
-    toTrans (ArmBase t : as) js =  (ArmBaseMatrix $ translateXTrans t <> rotateTrans (pi / 2) ) : toTrans as js
-    toTrans (ArmJoint t : as) (j:js) =  ArmJointMatrix (translateXTrans t) (rotateTrans j) : toTrans as js
-    toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXTrans t]
+    toTrans (ArmBase t : as) js = (ArmBaseMatrix $ translateXTrans t <> rotateTrans (pi / 2)) : toTrans as js
+    toTrans (ArmJoint t : as) (j : js) = ArmJointMatrix (translateXTrans t) (rotateTrans j) : toTrans as js
+    toTrans [ArmBat t] [] = [ArmBatMatrix $ translateXTrans t]
 
 -- | Calculate the inverse transforms for forward kinematics
-applyForwardKinematicTransInv :: 
+applyForwardKinematicTransInv ::
   ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
 applyForwardKinematicTransInv arm v = reverse $ toTrans arm motion
   where
     motion = Numerical.toList v :: [Numerical.R]
 
     toTrans :: ArmKinematic -> [Numerical.R] -> ArmKinematicMatrix
-    toTrans (ArmBase t : as) js =  (ArmBaseMatrix $ rotateInvTrans (pi / 2) <> translateXInvTrans t ) : toTrans as js
-    toTrans (ArmJoint t : as) (j:js) =  ArmJointMatrix (translateXInvTrans t) (rotateInvTrans j) : toTrans as js
-    toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXInvTrans t]
+    toTrans (ArmBase t : as) js = (ArmBaseMatrix $ rotateInvTrans (pi / 2) <> translateXInvTrans t) : toTrans as js
+    toTrans (ArmJoint t : as) (j : js) = ArmJointMatrix (translateXInvTrans t) (rotateInvTrans j) : toTrans as js
+    toTrans [ArmBat t] [] = [ArmBatMatrix $ translateXInvTrans t]
 
--- | Apply Forward Kinematic Transformations 
+-- | Apply Forward Kinematic Transformations
 applyForwardKinematicMatrixTrans :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R
-applyForwardKinematicMatrixTrans = foldr ((<>). getTrans) homogeneousIdent
+applyForwardKinematicMatrixTrans = foldr ((<>) . getTrans) homogeneousIdent
 
 -- | Apply Forward Kinematic Inverse Transformations (the list must go from end effecto to base)
 applyForwardKinematicMatrixTransInv :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R
-applyForwardKinematicMatrixTransInv = foldr ((<>). getTransInv) homogeneousIdent
+applyForwardKinematicMatrixTransInv = foldr ((<>) . getTransInv) homogeneousIdent
 
 -- | Compress the transforms of a Forward Kinematic Arm to only the joints and the end effector
 compressForwardKinematicsJointsTrans :: ArmKinematicMatrix -> ArmKinematicMatrix
@@ -566,7 +560,7 @@ compressForwardKinematicsJointsTrans a = compress a homogeneousIdent
     compress :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> ArmKinematicMatrix
     compress [ArmBatMatrix t] m = [ArmBatMatrix (m <> t)]
     compress (ArmJointMatrix t r : as) m = ArmJointMatrix (m <> t) r : compress as homogeneousIdent
-    compress (a:as) m = compress as (m <> getTrans a)
+    compress (a : as) m = compress as (m <> getTrans a)
 
 -- | Compress the transforms of a Forward Kinematic Arm to only the joints and the end base
 compressForwardKinematicsJointsInvTrans :: ArmKinematicMatrix -> ArmKinematicMatrix
@@ -575,15 +569,15 @@ compressForwardKinematicsJointsInvTrans a = compress a homogeneousIdent
     compress :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> ArmKinematicMatrix
     compress [ArmBaseMatrix t] m = [ArmBaseMatrix (t <> m)]
     compress (ArmJointMatrix t r : as) m = ArmJointMatrix (t <> m) r : compress as homogeneousIdent
-    compress (a:as) m = compress as (getTransInv a <> m)
+    compress (a : as) m = compress as (getTransInv a <> m)
 
--- | Calculate the 2D Homogeneous Jacobian of an arm [J^T|0]^T . 
+-- | Calculate the 2D Homogeneous Jacobian of an arm [J^T|0]^T .
 -- fwdMatTrans : Kinematic Forward Transforms (From base to end effector).
 -- fwdMatTransInv : Kinematic Forward Inverse Transforms (From end effector to base).
 -- xLocal : Position of Tool on End Effector Local Coordinates
-calculateJacobian :: 
+calculateJacobian ::
   ArmKinematicMatrix -> ArmKinematicMatrix -> Numerical.Vector Numerical.R -> Numerical.Matrix Numerical.R
-calculateJacobian fwdMatTrans fwdMatTransInv xLocal = jH 
+calculateJacobian fwdMatTrans fwdMatTransInv xLocal = jH
   where
     -- Compressed form guarantees that the links were applied to the joints
     fwdTransCompressed = compressForwardKinematicsJointsTrans fwdMatTrans
@@ -592,30 +586,27 @@ calculateJacobian fwdMatTrans fwdMatTransInv xLocal = jH
     -- Derivative of a revolute Joint
     revoluteDeriv = Numerical.fromLists [[0, -1, 0], [1, 0, 0], [0, 0, 0]] :: Numerical.Matrix Numerical.R
 
-    -- | Creates a rolling inverse list from bat to base
     rollingTransInv :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> [Numerical.Matrix Numerical.R]
     rollingTransInv [ArmBaseMatrix t] m = [t <> m]
     rollingTransInv (a : as) m = roll : rollingTransInv as roll
-      where 
-        roll = getTransInv a <> m 
-
-    -- | Calculates Jacobian Columns from the base of the robot. It accumulates the transform from base to the end
-    -- and uses the rolling inverse to avoid recalculating many times the same thing
-    calculate :: 
+      where
+        roll = getTransInv a <> m
+    calculate ::
       ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> [Numerical.Matrix Numerical.R] -> [Numerical.Vector Numerical.R]
     calculate [ArmBatMatrix _] _ [_] = [] -- We reach the bat, we no longer need to process
-    calculate (j@(ArmJointMatrix _ _):as) m (endToJ:mIs) 
-      =  (baseToJ <> revoluteDeriv <> endToJ) Numerical.#> xLocal : calculate as baseToJ mIs
+    calculate (j@(ArmJointMatrix _ _) : as) m (endToJ : mIs) =
+      (baseToJ <> revoluteDeriv <> endToJ) Numerical.#> xLocal : calculate as baseToJ mIs
       where
         baseToJ = m <> getTrans j
 
     -- Jacobian in this form: [J^T|0]^T there is a row of 0s at the end due to 2d homogeneous coordinates
-    jH = Numerical.fromColumns $ 
-      calculate fwdTransCompressed homogeneousIdent (rollingTransInv fwdTransInvCompressed homogeneousIdent)
+    jH =
+      Numerical.fromColumns $
+        calculate fwdTransCompressed homogeneousIdent (rollingTransInv fwdTransInvCompressed homogeneousIdent)
 
 -- | Get the Jacobian from the Homogeneous Jacobian (Note this doesn't work for the inverse of the Jacobian)
 getJacobianFromHomogeneousJacobian :: Numerical.Matrix Numerical.R -> Numerical.Matrix Numerical.R
-getJacobianFromHomogeneousJacobian jH = jH Numerical.?? (Numerical.DropLast 1, Numerical.All) 
+getJacobianFromHomogeneousJacobian jH = jH Numerical.?? (Numerical.DropLast 1, Numerical.All)
 
 -- | Newton Raphson Threshold
 newtonRaphsonThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
@@ -626,12 +617,15 @@ newtonRaphsonThreshold = threshold 0.000001
 -- q : Current Joints.
 -- xLocal : Tool in End-Effector Local Coordinates
 -- xTargetGlobal : Target in Global Coordinates
-newtonRaphsonStep :: 
-  ArmKinematic -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R 
-    -> Maybe (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonStep ::
+  ArmKinematic ->
+  Numerical.Vector Numerical.R ->
+  Numerical.Vector Numerical.R ->
+  Numerical.Vector Numerical.R ->
+  Maybe (Numerical.Vector Numerical.R, Numerical.R)
 newtonRaphsonStep a q xLocal xTargetGlobal
   | singular = Nothing
-  | otherwise = Just (qn, Numerical.norm_2 eN) 
+  | otherwise = Just (qn, Numerical.norm_2 eN)
   where
     -- Forward Transforms
     fwdT = applyForwardKinematicTrans a q
@@ -640,7 +634,7 @@ newtonRaphsonStep a q xLocal xTargetGlobal
 
     -- Bat Global Position
     batGlobal = applyForwardKinematicMatrixTrans fwdT Numerical.#> xLocal
-    
+
     -- Error
     e = xTargetGlobal - batGlobal
 
@@ -660,7 +654,7 @@ newtonRaphsonStep a q xLocal xTargetGlobal
 
     -- New Error
     eN = xTargetGlobal - batN
-    
+
     -- If the move was singular
     singular = Numerical.rank jH < 2 && newtonRaphsonThreshold 0 dqNorm == 0
 
@@ -669,36 +663,40 @@ newtonRaphsonIKMaxStep :: Int
 newtonRaphsonIKMaxStep = 10000
 
 -- | NewtonRaphson Loop Iteration
-newtonRaphsonIKIter :: 
-  Int -> ArmKinematic -> (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) 
-    -> Numerical.Vector Numerical.R -> (Numerical.Vector Numerical.R, Numerical.R)
-    -> (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonIKIter ::
+  Int ->
+  ArmKinematic ->
+  (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) ->
+  Numerical.Vector Numerical.R ->
+  (Numerical.Vector Numerical.R, Numerical.R) ->
+  (Numerical.Vector Numerical.R, Numerical.R)
 newtonRaphsonIKIter i a (xLocal, xTargetGlobal) q (qBest, eBest)
   | i == newtonRaphsonIKMaxStep = (qBest, eBest)
   | newtonRaphsonThreshold 0 eBest == 0 = (qBest, eBest)
-  | needReset = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qR (qBest, eBest)
-  | eN < eBest = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qN (qN, eN)
-  | otherwise = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
+  | needReset = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | eN < eBest = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qN (qN, eN)
+  | otherwise = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
   where
     -- Random Vector
     qSize = Numerical.size q
     pseudoInt = round $ fromIntegral i ** (Numerical.dot q qBest * (bool (eBest + 1) (1 / eBest) (eBest < 1 && 0 < eBest)))
-    qR = pi/2 * (2 * (Numerical.randomVector pseudoInt Numerical.Uniform qSize ) - 1)
+    qR = pi / 2 * (2 * (Numerical.randomVector pseudoInt Numerical.Uniform qSize) - 1)
 
     -- Perform the step
     step = newtonRaphsonStep a q xLocal xTargetGlobal
 
     needReset = case step of
-        Nothing ->  True
-        Just _ -> False
+      Nothing -> True
+      Just _ -> False
 
     (qN, eN) = fromJust step
 
 -- | Newton Raphson IK Algorithm
-newtonRaphsonIK :: 
-  ArmKinematic -> (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) 
-    -> Numerical.Vector Numerical.R 
-    -> (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonIK ::
+  ArmKinematic ->
+  (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) ->
+  Numerical.Vector Numerical.R ->
+  (Numerical.Vector Numerical.R, Numerical.R)
 newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 a (xLocal, xTargetGlobal) q (q, eNorm)
   where
     -- Forward Transforms
@@ -706,7 +704,7 @@ newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 a (xLocal, x
 
     -- Bat Global Position
     batGlobal = applyForwardKinematicMatrixTrans fwdT Numerical.#> xLocal
-    
+
     -- Error
     e = xTargetGlobal - batGlobal
     eNorm = Numerical.norm_2 e

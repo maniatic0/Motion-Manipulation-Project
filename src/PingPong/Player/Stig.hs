@@ -11,7 +11,6 @@ import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Geometry.Vector.VectorFamilyPeano
 import Data.Maybe
---import Control.Monad.State.Lazy
 
 import GHC.Float
 import Graphics.Gloss (Color, makeColor)
@@ -19,7 +18,7 @@ import qualified Numeric.LinearAlgebra as Numerical
 import PingPong.Model
 import PingPong.Player
 
--- import Debug.Trace
+import Debug.Trace
 
 -- Geometry Helpers
 
@@ -36,12 +35,12 @@ globalThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
 globalThreshold = threshold 0.001
 
 -- | tau = 2 * pi
-tau :: Float
+tau :: forall a. Floating a => a
 tau = 2 * pi
 
 -- | Normalize Angle in Radians between (-pi, pi]
 -- Based on https://stackoverflow.com/a/2323034
-normalizeAngle :: Float -> Float
+normalizeAngle :: (Num r, Ord r, Floating r, Fractional r, Real r) => r -> r
 normalizeAngle a =
   let a1 = mod' a tau
       a2 = mod' (a + tau) tau
@@ -313,7 +312,7 @@ stig =
       foot = stigFoot,
       action = stigAction,
       collide = stigCollide,
-      planPnt = const $ const $ const [0],
+      planPnt = stigPlanPnt,
       planSeg = const $ const $ const [0]
     }
 
@@ -491,6 +490,14 @@ rotateInvTrans a =
 homogeneousPoint :: Numerical.R -> Numerical.R -> Numerical.Vector Numerical.R
 homogeneousPoint x y = Numerical.fromList [x, y, 1]
 
+-- | Zero Point in Homogenous Coordinates
+homogeneousZero :: Numerical.Vector Numerical.R
+homogeneousZero = homogeneousPoint 0 0
+
+-- | 2d Point to Homogeneous Coordinates
+pointToHomogenousPoint :: Point 2 Float -> Numerical.Vector Numerical.R
+pointToHomogenousPoint p = homogeneousPoint (float2Double $ view xCoord  p) (float2Double $ view yCoord p)
+
 homogeneousIdent :: Numerical.Matrix Numerical.R
 homogeneousIdent = Numerical.ident 3
 
@@ -643,11 +650,13 @@ newtonRaphsonStep a q xLocal xTargetGlobal
     j = getJacobianFromHomogeneousJacobian jH
 
     -- Calculate delta q
-    dq = Numerical.pinv j Numerical.#> er
+    dq = -Numerical.pinv j Numerical.#> er
 
     dqNorm = Numerical.norm_2 dq
 
-    qn = q + dq
+    qnUnormalized = q + dq
+    -- Re normalizes angles for more accuracy
+    qn = Numerical.fromList $ map normalizeAngle $ Numerical.toList qnUnormalized
 
     -- New Bat Position
     batN = applyForwardKinematicMatrixTrans (applyForwardKinematicTrans a qn) Numerical.#> xLocal
@@ -662,20 +671,29 @@ newtonRaphsonStep a q xLocal xTargetGlobal
 newtonRaphsonIKMaxStep :: Int
 newtonRaphsonIKMaxStep = 10000
 
+-- | Really Bad Step
+newtonRaphsonIKBadStep :: forall a. Floating a => a
+newtonRaphsonIKBadStep = 10
+
+-- | When to do a random Restart Newton Raphson Step
+newtonRaphsonIKMaxRandomRestartStep :: Int
+newtonRaphsonIKMaxRandomRestartStep = round $ (fromIntegral newtonRaphsonIKMaxStep / 10)
+
 -- | NewtonRaphson Loop Iteration
 newtonRaphsonIKIter ::
-  Int ->
+  Int -> Int ->
   ArmKinematic ->
   (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) ->
   Numerical.Vector Numerical.R ->
   (Numerical.Vector Numerical.R, Numerical.R) ->
   (Numerical.Vector Numerical.R, Numerical.R)
-newtonRaphsonIKIter i a (xLocal, xTargetGlobal) q (qBest, eBest)
-  | i == newtonRaphsonIKMaxStep = (qBest, eBest)
-  | newtonRaphsonThreshold 0 eBest == 0 = (qBest, eBest)
-  | needReset = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qR (qBest, eBest)
-  | eN < eBest = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qN (qN, eN)
-  | otherwise = newtonRaphsonIKIter (i + 1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
+newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
+  | i >= newtonRaphsonIKMaxStep = trace ("Limit " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
+  | newtonRaphsonThreshold 0 eBest == 0 = trace ("Perfect " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
+  | singular = trace ("Singular " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | needReset = trace ("Need Reset " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | eN < eBest = trace ("New Best " ++ show i ++ " " ++ show (qN, eN)) $ newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qN, eN)
+  | otherwise = trace ("Step " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
   where
     -- Random Vector
     qSize = Numerical.size q
@@ -685,11 +703,15 @@ newtonRaphsonIKIter i a (xLocal, xTargetGlobal) q (qBest, eBest)
     -- Perform the step
     step = newtonRaphsonStep a q xLocal xTargetGlobal
 
-    needReset = case step of
+    singular = case step of
       Nothing -> True
       Just _ -> False
 
     (qN, eN) = fromJust step
+
+    needReset = eN >= eBest * newtonRaphsonIKBadStep && j >= newtonRaphsonIKMaxRandomRestartStep
+
+    
 
 -- | Newton Raphson IK Algorithm
 newtonRaphsonIK ::
@@ -697,7 +719,7 @@ newtonRaphsonIK ::
   (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) ->
   Numerical.Vector Numerical.R ->
   (Numerical.Vector Numerical.R, Numerical.R)
-newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 a (xLocal, xTargetGlobal) q (q, eNorm)
+newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 0 a (xLocal, xTargetGlobal) q (q, eNorm)
   where
     -- Forward Transforms
     fwdT = applyForwardKinematicTrans a q
@@ -708,3 +730,110 @@ newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 a (xLocal, x
     -- Error
     e = xTargetGlobal - batGlobal
     eNorm = Numerical.norm_2 e
+
+-- | Calculates the possible motion values to achieve a point. If it fails it returns []
+stigPlanPnt :: Float -> Arm -> Point 2 Float -> Motion
+stigPlanPnt foot arm p 
+ | globalThreshold 0 eB == 0 = trace ("Converges " ++ show (qB, eB)) $ map normalizeAngle $ jointVectorToMotion qB
+ | otherwise = trace ("Failed to converge " ++ show (qB, eB)) $ []
+ where
+    (a, m) = getArmKinematicAndMotion foot arm
+    q = motionToJointVector m
+    (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q
+
+-- | Create a Test Case for stigPlanPnt
+createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
+createPlanPntCase f a (xT,yT) m = (f, a, Point2 xT yT, m)
+
+-- | Test stigPlanPnt
+testPlanPnt :: (Float, Arm, Point 2 Float, Motion) -> Bool
+testPlanPnt (f, arm, pT, mT) 
+  | null mT = null mB
+  | null mB = null mT
+  | otherwise = result
+  where
+    -- Expected Position
+    qT = motionToJointVector mT
+    xTargetGlobal = pointToHomogenousPoint pT
+
+    -- Arm
+    (a, _) = getArmKinematicAndMotion f arm 
+
+    -- Calculate Answer
+    mB = stigPlanPnt f arm pT
+    qB = motionToJointVector mB
+
+    -- Forward Transforms
+    fwdTT = applyForwardKinematicTrans a qT
+    fwdTB = applyForwardKinematicTrans a qB
+    
+
+    -- Bat Global Position
+    batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
+    batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
+
+    -- Error
+    eB = xTargetGlobal - batGlobalB
+    eNormB = Numerical.norm_2 eB
+
+    eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+    eNormT = Numerical.norm_2 eT
+
+    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+
+-- | Test Cases for testPlanPnt
+planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
+planPntTestCases = [
+  (
+    1.5, 
+    [
+      Link red 0.2, 
+      Joint red 0.0, 
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.2,
+      Joint red 0.0,
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.1
+    ], 
+    Point2 1.22385 0.80917, 
+    [0.1, 0.2, 0.3, 0.4]
+    ),
+  (
+    1.5, 
+    [
+      Link red 0.2, 
+      Joint red 0.0, 
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.2,
+      Joint red 0.0,
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.1
+    ], 
+    Point2 1.77615 0.80917, 
+    [-0.5, 0.0, 0.4, 0.6]
+    ),
+  (
+    1.5, 
+    [
+      Link red 0.2, 
+      Joint red 0.0, 
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.2,
+      Joint red 0.0,
+      Link red 0.2, 
+      Joint red 0.0,
+      Link red 0.1
+    ], 
+    Point2 1.48013 0.89202, 
+    [0.1, -0.2, 0.3, -0.4]
+    )
+  ]
+
+-- | Executes testPlanPnt
+executePlanPntTestCases :: [Bool]
+executePlanPntTestCases = map testPlanPnt planPntTestCases

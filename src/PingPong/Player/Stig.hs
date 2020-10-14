@@ -15,6 +15,8 @@ import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
 import PingPong.Player
 
+--import Control.Monad.State.Lazy
+
 import GHC.Float
 
 import qualified  Numeric.LinearAlgebra as Numerical
@@ -615,6 +617,15 @@ calculateJacobian fwdMatTrans fwdMatTransInv xLocal = jH
 getJacobianFromHomogeneousJacobian :: Numerical.Matrix Numerical.R -> Numerical.Matrix Numerical.R
 getJacobianFromHomogeneousJacobian jH = jH Numerical.?? (Numerical.DropLast 1, Numerical.All) 
 
+-- | Newton Raphson Threshold
+newtonRaphsonThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
+newtonRaphsonThreshold = threshold 0.000001
+
+-- | Calculates a Newton-Raphson IK step (if singular it fails). Returns the new Joints and its error agains target
+-- a : Arm Description.
+-- q : Current Joints.
+-- xLocal : Tool in End-Effector Local Coordinates
+-- xTargetGlobal : Target in Global Coordinates
 newtonRaphsonStep :: 
   ArmKinematic -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R 
     -> Maybe (Numerical.Vector Numerical.R, Numerical.R)
@@ -651,4 +662,50 @@ newtonRaphsonStep a q xLocal xTargetGlobal
     eN = xTargetGlobal - batN
     
     -- If the move was singular
-    singular = Numerical.rank jH < 2 && globalThreshold dqNorm 0 == 0
+    singular = Numerical.rank jH < 2 && newtonRaphsonThreshold 0 dqNorm == 0
+
+-- | Maximum Newton Raphson Step
+newtonRaphsonIKMaxStep :: Int
+newtonRaphsonIKMaxStep = 10000
+
+-- | NewtonRaphson Loop Iteration
+newtonRaphsonIKIter :: 
+  Int -> ArmKinematic -> (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) 
+    -> Numerical.Vector Numerical.R -> (Numerical.Vector Numerical.R, Numerical.R)
+    -> (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonIKIter i a (xLocal, xTargetGlobal) q (qBest, eBest)
+  | i == newtonRaphsonIKMaxStep = (qBest, eBest)
+  | newtonRaphsonThreshold 0 eBest == 0 = (qBest, eBest)
+  | needReset = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | eN < eBest = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qN (qN, eN)
+  | otherwise = newtonRaphsonIKIter (i+1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
+  where
+    -- Random Vector
+    qSize = Numerical.size q
+    pseudoInt = round $ fromIntegral (mod i qSize) ** Numerical.dot q qBest
+    qR = Numerical.randomVector pseudoInt Numerical.Uniform qSize
+
+    step = newtonRaphsonStep a q xLocal xTargetGlobal
+
+    needReset = case step of
+        Nothing ->  True
+        Just _ -> False
+
+    (qN, eN) = fromJust step
+
+-- | Newton Raphson IK Algorithm
+newtonRaphsonIK :: 
+  ArmKinematic -> (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) 
+    -> Numerical.Vector Numerical.R 
+    -> (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 a (xLocal, xTargetGlobal) q (q, eNorm)
+  where
+    -- Forward Transforms
+    fwdT = applyForwardKinematicTrans a q
+
+    -- Bat Global Position
+    batGlobal = applyForwardKinematicMatrixTrans fwdT Numerical.#> xLocal
+    
+    -- Error
+    e = xTargetGlobal - batGlobal
+    eNorm = Numerical.norm_2 e

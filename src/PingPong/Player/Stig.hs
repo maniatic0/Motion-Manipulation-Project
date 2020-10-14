@@ -685,6 +685,7 @@ newtonRaphsonIKIter i a (xLocal, xTargetGlobal) q (qBest, eBest)
     pseudoInt = round $ fromIntegral i ** (Numerical.dot q qBest * (bool (eBest + 1) (1 / eBest) (eBest < 1 && 0 < eBest)))
     qR = pi/2 * (2 * (Numerical.randomVector pseudoInt Numerical.Uniform qSize ) - 1)
 
+    -- Perform the step
     step = newtonRaphsonStep a q xLocal xTargetGlobal
 
     needReset = case step of

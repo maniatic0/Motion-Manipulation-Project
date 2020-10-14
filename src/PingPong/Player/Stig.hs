@@ -8,7 +8,7 @@ import Control.Lens ( (&), (^.), view, (.~) )
 import Data.Bool (bool)
 import Data.Ext
 import Data.Fixed (mod')
-import Data.Geometry
+import Data.Geometry hiding (head)
 import Data.Geometry.Vector.VectorFamilyPeano
 import Data.Maybe
 import Graphics.Gloss (Color, makeColor)
@@ -17,7 +17,7 @@ import PingPong.Player
 
 import GHC.Float
 
-import qualified  Numeric.LinearAlgebra.Data as Numerical
+import qualified  Numeric.LinearAlgebra as Numerical
 
 
 -- import Debug.Trace
@@ -489,6 +489,13 @@ rotateInvTrans a =
     c = cos a
     s = sin a
 
+-- | Create an homogeneous 2D point
+homogeneousPoint :: Numerical.R -> Numerical.R -> Numerical.Vector Numerical.R
+homogeneousPoint x y = Numerical.fromList [x, y, 1]
+
+homogeneousIdent ::  Numerical.Matrix Numerical.R
+homogeneousIdent = Numerical.ident 3
+
 data ArmKinematicPartMatrix = ArmBaseMatrix
   {
     footMatrix :: Numerical.Matrix Numerical.R
@@ -506,6 +513,18 @@ data ArmKinematicPartMatrix = ArmBaseMatrix
 
 type ArmKinematicMatrix = [ArmKinematicPartMatrix]
 
+-- | Get Transform from Part Matrix
+getTrans :: ArmKinematicPartMatrix -> Numerical.Matrix Numerical.R
+getTrans (ArmBaseMatrix t) = t
+getTrans (ArmJointMatrix t r) = t <> r
+getTrans (ArmBatMatrix t) = t
+
+-- | Get Inverse Transform from Part Matrix
+getTransInv :: ArmKinematicPartMatrix -> Numerical.Matrix Numerical.R
+getTransInv (ArmBaseMatrix t) = t
+getTransInv (ArmJointMatrix t r) = r <> t
+getTransInv (ArmBatMatrix t) = t
+
 -- | Calculate the transforms for forward kinematics
 applyForwardKinematicTrans :: 
   ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
@@ -519,9 +538,9 @@ applyForwardKinematicTrans arm v = toTrans arm motion
     toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXTrans t]
 
 -- | Calculate the inverse transforms for forward kinematics
-applyForwardKinematicInvTrans :: 
+applyForwardKinematicTransInv :: 
   ArmKinematic -> Numerical.Vector Numerical.R -> ArmKinematicMatrix
-applyForwardKinematicInvTrans arm v = reverse $ toTrans arm motion
+applyForwardKinematicTransInv arm v = reverse $ toTrans arm motion
   where
     motion = Numerical.toList v :: [Numerical.R]
 
@@ -529,3 +548,107 @@ applyForwardKinematicInvTrans arm v = reverse $ toTrans arm motion
     toTrans (ArmBase t : as) js =  (ArmBaseMatrix $ rotateInvTrans (pi / 2) <> translateXInvTrans t ) : toTrans as js
     toTrans (ArmJoint t : as) (j:js) =  ArmJointMatrix (translateXInvTrans t) (rotateInvTrans j) : toTrans as js
     toTrans [ArmBat t] [] =  [ArmBatMatrix $ translateXInvTrans t]
+
+-- | Apply Forward Kinematic Transformations 
+applyForwardKinematicMatrixTrans :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R
+applyForwardKinematicMatrixTrans = foldr ((<>). getTrans) homogeneousIdent
+
+-- | Apply Forward Kinematic Inverse Transformations (the list must go from end effecto to base)
+applyForwardKinematicMatrixTransInv :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R
+applyForwardKinematicMatrixTransInv = foldr ((<>). getTransInv) homogeneousIdent
+
+-- | Compress the transforms of a Forward Kinematic Arm to only the joints and the end effector
+compressForwardKinematicsJointsTrans :: ArmKinematicMatrix -> ArmKinematicMatrix
+compressForwardKinematicsJointsTrans a = compress a homogeneousIdent
+  where
+    compress :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> ArmKinematicMatrix
+    compress [ArmBatMatrix t] m = [ArmBatMatrix (m <> t)]
+    compress (ArmJointMatrix t r : as) m = ArmJointMatrix (m <> t) r : compress as homogeneousIdent
+    compress (a:as) m = compress as (m <> getTrans a)
+
+-- | Compress the transforms of a Forward Kinematic Arm to only the joints and the end base
+compressForwardKinematicsJointsInvTrans :: ArmKinematicMatrix -> ArmKinematicMatrix
+compressForwardKinematicsJointsInvTrans a = compress a homogeneousIdent
+  where
+    compress :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> ArmKinematicMatrix
+    compress [ArmBaseMatrix t] m = [ArmBaseMatrix (t <> m)]
+    compress (ArmJointMatrix t r : as) m = ArmJointMatrix (t <> m) r : compress as homogeneousIdent
+    compress (a:as) m = compress as (getTransInv a <> m)
+
+-- | Calculate the 2D Homogeneous Jacobian of an arm [J^T|0]^T . 
+-- fwdMatTrans : Kinematic Forward Transforms (From base to end effector).
+-- fwdMatTransInv : Kinematic Forward Inverse Transforms (From end effector to base).
+-- xLocal : Position of Tool on End Effector Local Coordinates
+calculateJacobian :: 
+  ArmKinematicMatrix -> ArmKinematicMatrix -> Numerical.Vector Numerical.R -> Numerical.Matrix Numerical.R
+calculateJacobian fwdMatTrans fwdMatTransInv xLocal = jH 
+  where
+    -- Compressed form guarantees that the links were applied to the joints
+    fwdTransCompressed = compressForwardKinematicsJointsTrans fwdMatTrans
+    fwdTransInvCompressed = compressForwardKinematicsJointsInvTrans fwdMatTransInv
+
+    -- Derivative of a revolute Joint
+    revoluteDeriv = Numerical.fromLists [[0, -1, 0], [1, 0, 0], [0, 0, 0]] :: Numerical.Matrix Numerical.R
+
+    -- | Creates a rolling inverse list from bat to base
+    rollingTransInv :: ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> [Numerical.Matrix Numerical.R]
+    rollingTransInv [ArmBaseMatrix t] m = [t <> m]
+    rollingTransInv (a : as) m = roll : rollingTransInv as roll
+      where 
+        roll = getTransInv a <> m 
+
+    -- | Calculates Jacobian Columns from the base of the robot. It accumulates the transform from base to the end
+    -- and uses the rolling inverse to avoid recalculating many times the same thing
+    calculate :: 
+      ArmKinematicMatrix -> Numerical.Matrix Numerical.R -> [Numerical.Matrix Numerical.R] -> [Numerical.Vector Numerical.R]
+    calculate [ArmBatMatrix _] _ [_] = [] -- We reach the bat, we no longer need to process
+    calculate (j@(ArmJointMatrix _ _):as) m (endToJ:mIs) 
+      =  (baseToJ <> revoluteDeriv <> endToJ) Numerical.#> xLocal : calculate as baseToJ mIs
+      where
+        baseToJ = m <> getTrans j
+
+    -- Jacobian in this form: [J^T|0]^T there is a row of 0s at the end due to 2d homogeneous coordinates
+    jH = Numerical.fromColumns $ 
+      calculate fwdTransCompressed homogeneousIdent (rollingTransInv fwdTransInvCompressed homogeneousIdent)
+
+-- | Get the Jacobian from the Homogeneous Jacobian (Note this doesn't work for the inverse of the Jacobian)
+getJacobianFromHomogeneousJacobian :: Numerical.Matrix Numerical.R -> Numerical.Matrix Numerical.R
+getJacobianFromHomogeneousJacobian jH = jH Numerical.?? (Numerical.DropLast 1, Numerical.All) 
+
+newtonRaphsonStep :: 
+  ArmKinematic -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R 
+    -> Maybe (Numerical.Vector Numerical.R, Numerical.R)
+newtonRaphsonStep a q xLocal xTargetGlobal
+  | singular = Nothing
+  | otherwise = Just (qn, Numerical.norm_2 eN) 
+  where
+    -- Forward Transforms
+    fwdT = applyForwardKinematicTrans a q
+    fwdTI = applyForwardKinematicTransInv a q
+    jH = calculateJacobian fwdT fwdTI xLocal
+
+    -- Bat Global Position
+    batGlobal = applyForwardKinematicMatrixTrans fwdT Numerical.#> xLocal
+    
+    -- Error
+    e = xTargetGlobal - batGlobal
+
+    -- Drop Homogeneous part
+    er = Numerical.subVector 0 2 e
+    j = getJacobianFromHomogeneousJacobian jH
+
+    -- Calculate delta q
+    dq = Numerical.pinv j Numerical.#> er
+
+    dqNorm = Numerical.norm_2 dq
+
+    qn = q + dq
+
+    -- New Bat Position
+    batN = applyForwardKinematicMatrixTrans (applyForwardKinematicTrans a qn) Numerical.#> xLocal
+
+    -- New Error
+    eN = xTargetGlobal - batN
+    
+    -- If the move was singular
+    singular = Numerical.rank jH < 2 && globalThreshold dqNorm 0 == 0

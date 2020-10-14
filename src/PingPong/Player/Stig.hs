@@ -1,8 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig  --(stig)
-  where
+module PingPong.Player.Stig where --(stig)
 
 import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
@@ -11,14 +10,12 @@ import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Geometry.Vector.VectorFamilyPeano
 import Data.Maybe
-
+import Debug.Trace
 import GHC.Float
 import Graphics.Gloss (Color, makeColor)
 import qualified Numeric.LinearAlgebra as Numerical
 import PingPong.Model
 import PingPong.Player
-
-import Debug.Trace
 
 -- Geometry Helpers
 
@@ -496,7 +493,7 @@ homogeneousZero = homogeneousPoint 0 0
 
 -- | 2d Point to Homogeneous Coordinates
 pointToHomogenousPoint :: Point 2 Float -> Numerical.Vector Numerical.R
-pointToHomogenousPoint p = homogeneousPoint (float2Double $ view xCoord  p) (float2Double $ view yCoord p)
+pointToHomogenousPoint p = homogeneousPoint (float2Double $ view xCoord p) (float2Double $ view yCoord p)
 
 homogeneousIdent :: Numerical.Matrix Numerical.R
 homogeneousIdent = Numerical.ident 3
@@ -650,7 +647,7 @@ newtonRaphsonStep a q xLocal xTargetGlobal
     j = getJacobianFromHomogeneousJacobian jH
 
     -- Calculate delta q
-    dq = -Numerical.pinv j Numerical.#> er
+    dq = - Numerical.pinv j Numerical.#> er
 
     dqNorm = Numerical.norm_2 dq
 
@@ -681,7 +678,8 @@ newtonRaphsonIKMaxRandomRestartStep = round $ (fromIntegral newtonRaphsonIKMaxSt
 
 -- | NewtonRaphson Loop Iteration
 newtonRaphsonIKIter ::
-  Int -> Int ->
+  Int ->
+  Int ->
   ArmKinematic ->
   (Numerical.Vector Numerical.R, Numerical.Vector Numerical.R) ->
   Numerical.Vector Numerical.R ->
@@ -711,8 +709,6 @@ newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
 
     needReset = eN >= eBest * newtonRaphsonIKBadStep && j >= newtonRaphsonIKMaxRandomRestartStep
 
-    
-
 -- | Newton Raphson IK Algorithm
 newtonRaphsonIK ::
   ArmKinematic ->
@@ -733,21 +729,21 @@ newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 0 a (xLocal,
 
 -- | Calculates the possible motion values to achieve a point. If it fails it returns []
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> Motion
-stigPlanPnt foot arm p 
- | globalThreshold 0 eB == 0 = trace ("Converges " ++ show (qB, eB)) $ map normalizeAngle $ jointVectorToMotion qB
- | otherwise = trace ("Failed to converge " ++ show (qB, eB)) $ []
- where
+stigPlanPnt foot arm p
+  | globalThreshold 0 eB == 0 = trace ("Converges " ++ show (qB, eB)) $ map normalizeAngle $ jointVectorToMotion qB
+  | otherwise = trace ("Failed to converge " ++ show (qB, eB)) $ []
+  where
     (a, m) = getArmKinematicAndMotion foot arm
     q = motionToJointVector m
     (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q
 
 -- | Create a Test Case for stigPlanPnt
 createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
-createPlanPntCase f a (xT,yT) m = (f, a, Point2 xT yT, m)
+createPlanPntCase f a (xT, yT) m = (f, a, Point2 xT yT, m)
 
 -- | Test stigPlanPnt
 testPlanPnt :: (Float, Arm, Point 2 Float, Motion) -> Bool
-testPlanPnt (f, arm, pT, mT) 
+testPlanPnt (f, arm, pT, mT)
   | null mT = null mB
   | null mB = null mT
   | otherwise = result
@@ -757,7 +753,7 @@ testPlanPnt (f, arm, pT, mT)
     xTargetGlobal = pointToHomogenousPoint pT
 
     -- Arm
-    (a, _) = getArmKinematicAndMotion f arm 
+    (a, _) = getArmKinematicAndMotion f arm
 
     -- Calculate Answer
     mB = stigPlanPnt f arm pT
@@ -766,7 +762,6 @@ testPlanPnt (f, arm, pT, mT)
     -- Forward Transforms
     fwdTT = applyForwardKinematicTrans a qT
     fwdTB = applyForwardKinematicTrans a qB
-    
 
     -- Bat Global Position
     batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
@@ -783,54 +778,48 @@ testPlanPnt (f, arm, pT, mT)
 
 -- | Test Cases for testPlanPnt
 planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
-planPntTestCases = [
-  (
-    1.5, 
-    [
-      Link red 0.2, 
-      Joint red 0.0, 
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.2,
-      Joint red 0.0,
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.1
-    ], 
-    Point2 1.22385 0.80917, 
-    [0.1, 0.2, 0.3, 0.4]
+planPntTestCases =
+  [ ( 1.5,
+      [ Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.1
+      ],
+      Point2 1.22385 0.80917,
+      [0.1, 0.2, 0.3, 0.4]
     ),
-  (
-    1.5, 
-    [
-      Link red 0.2, 
-      Joint red 0.0, 
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.2,
-      Joint red 0.0,
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.1
-    ], 
-    Point2 1.77615 0.80917, 
-    [-0.5, 0.0, 0.4, 0.6]
+    ( 1.5,
+      [ Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.1
+      ],
+      Point2 1.77615 0.80917,
+      [-0.5, 0.0, 0.4, 0.6]
     ),
-  (
-    1.5, 
-    [
-      Link red 0.2, 
-      Joint red 0.0, 
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.2,
-      Joint red 0.0,
-      Link red 0.2, 
-      Joint red 0.0,
-      Link red 0.1
-    ], 
-    Point2 1.48013 0.89202, 
-    [0.1, -0.2, 0.3, -0.4]
+    ( 1.5,
+      [ Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.1
+      ],
+      Point2 1.48013 0.89202,
+      [0.1, -0.2, 0.3, -0.4]
     )
   ]
 

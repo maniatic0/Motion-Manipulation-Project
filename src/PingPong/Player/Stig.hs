@@ -44,7 +44,7 @@ normalizeAngle a =
    in bool a2 (a2 - tau) (a2 > pi)
 
 -- | Shortest Distance Between Two Angles in Radians [-pi, pi)
-deltaAngle :: Float -> Float -> Float
+deltaAngle :: (Num r, Ord r, Floating r, Fractional r, Real r) => r -> r -> r
 deltaAngle a1 a2
   | diff >= pi = diff - tau
   | diff < - pi = tau + diff
@@ -687,7 +687,7 @@ newtonRaphsonIKBadStep = 10
 
 -- | When to do a random Restart Newton Raphson Step
 newtonRaphsonIKMaxRandomRestartStep :: Int
-newtonRaphsonIKMaxRandomRestartStep = round $ (fromIntegral newtonRaphsonIKMaxStep / 10)
+newtonRaphsonIKMaxRandomRestartStep = round (fromIntegral newtonRaphsonIKMaxStep / 10)
 
 -- | NewtonRaphson Loop Iteration
 newtonRaphsonIKIter ::
@@ -708,8 +708,8 @@ newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
   where
     -- Random Vector
     qSize = Numerical.size q
-    pseudoInt = round $ fromIntegral i ** (Numerical.dot q qBest * (bool (eBest + 1) (1 / eBest) (eBest < 1 && 0 < eBest)))
-    qR = pi / 2 * (2 * (Numerical.randomVector pseudoInt Numerical.Uniform qSize) - 1)
+    pseudoInt = round $ fromIntegral i ** (Numerical.dot q qBest * bool (eBest + 1) (1 / eBest) (eBest < 1 && 0 < eBest))
+    qR = pi / 2 * (2 * Numerical.randomVector pseudoInt Numerical.Uniform qSize - 1)
 
     -- Perform the step
     step = newtonRaphsonStep a q xLocal xTargetGlobal
@@ -776,13 +776,13 @@ stigPlanSeg foot arm s
     restArmRev = tail revArm 
 
     -- Joints between original bat and the next link to use as a bat for the rest
-    firstJointsRev = takeWhile (isJoint) restArmRev 
+    firstJointsRev = takeWhile isJoint restArmRev 
 
     -- The arm is a bat (or can be simplified to that) and nothing else
     isOnlyBat = null firstJointsRev
 
     -- Small arm with a bat for first link. Note that it can be empty
-    smallRev = dropWhile (isJoint) restArmRev
+    smallRev = dropWhile isJoint restArmRev
 
     -- Small from base to new bat
     smallArm = reverse smallRev
@@ -793,12 +793,14 @@ stigPlanSeg foot arm s
     -- Base to End point of Segment
     onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
     onlyBatJointBaseToP1Norm = Numerical.norm_2 onlyBatJointBaseToP1
-    onlyBatJointAngle 
-      = bool 0 (acos((Numerical.dot onlyBatJointBaseToP1 homogeneousVectorY) / onlyBatJointBaseToP1Norm)) (onlyBatJointBaseToP1Norm > 0)
+    onlyBatJointBaseToP1Angle = atan2 (Numerical.atIndex onlyBatJointBaseToP1 1) (Numerical.atIndex onlyBatJointBaseToP1 0)
+    onlyBatJointBaseToYAngle = pi/2
+    
+    onlyBatJointAngle = deltaAngle onlyBatJointBaseToP1Angle onlyBatJointBaseToYAngle
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
     
     -- Check that the bat has the same length as the distance from base to endpoint
-    onlyBatJointCheck = (globalThreshold 0 ((float2Double batLength) - onlyBatJointBaseToP1Norm) == 0)
+    onlyBatJointCheck = globalThreshold 0 (float2Double batLength - onlyBatJointBaseToP1Norm) == 0
     
     -- From here we are in a normal case we have at least this form: link (bat) -- joint -- link -- base
     -- Small Arm must reach the start point of segment
@@ -818,13 +820,14 @@ stigPlanSeg foot arm s
     -- Vector from small bat to target
     smallBatToP1 = p1 - smallBatGlobal
     smallBatToP1Norm = Numerical.norm_2 smallBatToP1
-    jointAngle 
-      = bool (0) (acos((Numerical.dot smallBatToP1 smallBatGlobalXAxisNorm) / smallBatToP1Norm)) (smallBatToP1Norm > 0)
+    smallBatToP1Angle = atan2 (Numerical.atIndex smallBatToP1 1) (Numerical.atIndex smallBatToP1 0)
+    smallBatToXAxisAngle = atan2 (Numerical.atIndex smallBatGlobalXAxisNorm 1) (Numerical.atIndex smallBatGlobalXAxisNorm 0)
+    jointAngle = deltaAngle smallBatToP1Angle smallBatToXAxisAngle
 
-    qF = m ++ (reverse $ setFirstJointRest0 jointAngle firstJointsRev)
+    qF = m ++ reverse (setFirstJointRest0 jointAngle firstJointsRev)
 
     -- Check that small bat is at p0 and that we can reach p1
-    normalCheck = globalThreshold 0 eB == 0 && (globalThreshold 0 ((float2Double batLength) - smallBatToP1Norm) == 0)
+    normalCheck = globalThreshold 0 eB == 0 && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
 
     -- | If an Element is a joint
     isJoint :: Element -> Bool
@@ -837,7 +840,7 @@ stigPlanSeg foot arm s
 
     -- | Set first joint with a value and the rest is 0 (the arm includes the joint)
     setFirstJointRest0 :: Double -> Arm -> Motion 
-    setFirstJointRest0 q as = (double2Float q) : map (const 0) (tail as)
+    setFirstJointRest0 q as = double2Float q : map (const 0) (tail as)
     
 
 -- | Create a Test Case for stigPlanPnt
@@ -849,7 +852,7 @@ testPlanPnt :: (Float, Arm, Point 2 Float, Motion) -> Bool
 testPlanPnt (f, arm, pT, mT)
   | null mT = null mB
   | null mB = null mT
-  | otherwise = result
+  | otherwise = result && (length mB == length mT)
   where
     -- Expected Position
     qT = motionToJointVector mT
@@ -882,7 +885,8 @@ testPlanPnt (f, arm, pT, mT)
 -- | Test Cases for testPlanPnt
 planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
 planPntTestCases =
-  [ ( 1.5,
+  [
+    createPlanPntCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -892,11 +896,11 @@ planPntTestCases =
         Link red 0.2,
         Joint red 0.0,
         Link red 0.1
-      ],
-      Point2 1.22385 0.80917,
+      ]
+      (1.22385, 0.80917)
       [0.1, 0.2, 0.3, 0.4]
-    ),
-    ( 1.5,
+    ,
+    createPlanPntCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -906,11 +910,11 @@ planPntTestCases =
         Link red 0.2,
         Joint red 0.0,
         Link red 0.1
-      ],
-      Point2 1.77615 0.80917,
+      ]
+      (1.77615, 0.80917)
       [-0.5, 0.0, 0.4, 0.6]
-    ),
-    ( 1.5,
+    ,
+    createPlanPntCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -920,12 +924,88 @@ planPntTestCases =
         Link red 0.2,
         Joint red 0.0,
         Link red 0.1
-      ],
-      Point2 1.48013 0.89202,
+      ]
+      (1.48013, 0.89202)
       [0.1, -0.2, 0.3, -0.4]
-    )
   ]
 
 -- | Executes testPlanPnt
 executePlanPntTestCases :: Bool
 executePlanPntTestCases = all testPlanPnt planPntTestCases
+
+-- | Create a Test Case for stigPlanSeg
+createPlanSegCase :: Float -> Arm -> (Float, Float) -> (Float, Float) -> Motion -> (Float, Arm, LineSegment 2 () Float, Motion)
+createPlanSegCase f a (xP0, yP0) (xP1, yP1) m = (f, a, ClosedLineSegment (Point2 xP0 yP0 :+ ()) (Point2 xP1 yP1 :+ ()), m)
+
+-- | Test stigPlanSeg
+testPlanSeg :: (Float, Arm, LineSegment 2 () Float, Motion) -> Bool
+testPlanSeg (f, arm, sT, mT)
+  | null mT = null mB
+  | null mB = null mT
+  | otherwise = result && bool (trace "Different Motion Sizes" False) True (length mB == length mT)
+  where
+    -- Expected Position
+    pT = sT ^. (end . core)
+    qT = motionToJointVector mT
+    xTargetGlobal = pointToHomogenousPoint pT 
+
+    -- Arm
+    (a, _) = getArmKinematicAndMotion f arm
+
+    -- Calculate Answer
+    mB = stigPlanSeg f arm sT
+    qB = motionToJointVector mB
+
+    -- Forward Transforms
+    fwdTT = applyForwardKinematicTrans a qT
+    fwdTB = applyForwardKinematicTrans a qB
+
+    -- Bat Global Position
+    batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
+    batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
+
+    -- Error
+    eB = xTargetGlobal - batGlobalB
+    eNormB = Numerical.norm_2 eB
+
+    eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+    eNormT = Numerical.norm_2 eT
+
+    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+
+-- | Test Cases for testPlanPnt
+planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
+planSegTestCases = 
+  [
+   {-  createPlanSegCase 1.5
+      [ Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (1.48023, 0.79501) (1.48023, 0.89501)
+      [0.2, -0.2, -0.1, 0.1]
+    , -}
+    createPlanSegCase 1.5
+      [ Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.2,
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (1.71174, 0.75003) (1.66379, 0.83779)
+      [-0.5, 0.0, 0.4, 0.6]
+  ]
+
+-- | Executes testPlanSeg
+executePlanSegTestCases :: Bool
+executePlanSegTestCases = all testPlanSeg planSegTestCases

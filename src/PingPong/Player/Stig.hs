@@ -798,7 +798,7 @@ stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
 stigPlanSeg foot arm s
   | isOnlyBat = trace ("Weird Only Bat Case") [] -- No idea if we reach it because we can't move
   | isOnlyBatJoint = trace ("Weird Only Bat and Joint Case") $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
-  | normalCheck = trace ("Converges " ++ show (qF, eB, eBat)) $ map normalizeAngle qF
+  | normalCheck = trace ("Converges " ++ show (qF, eB)) $ map normalizeAngle qF
   | otherwise = trace ("Failed to converge " ++ show (qB, eB, smallBatToP1Norm, batLength)) $ []
   where
     -- Target Info
@@ -862,15 +862,11 @@ stigPlanSeg foot arm s
 
     -- Vector from small bat to target
     smallBatToP1 = p1Local - homogeneousZero
-    smallBatToP1Norm = Numerical.norm_2 smallBatToP1
+    (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
 
-    batArm = reverse $ bat:firstJointsRev
-    (aBat, mBat) = getArmKinematicAndMotion 0 batArm
+    smallBatAngle = angleVector smallBatToP1Normalized homogeneousVectorX
 
-    qBat = motionToJointVector mBat
-    (qBestBat, eBat) = newtonRaphsonIK aBat (homogeneousZero, (rotateTrans (-pi/2)) Numerical.#> p1Local) qBat
-
-    qF = mB ++ jointVectorToMotion qBestBat
+    qF = mB ++ reverse (setFirstJointRest0 smallBatAngle firstJointsRev)
 
     -- Check that small bat is at p0 and that we can reach p1
     normalCheck = globalThreshold 0 eB == 0 
@@ -1040,7 +1036,7 @@ testPlanSeg (f, arm, sT, mT)
 planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
 planSegTestCases = 
   [
-     {- createPlanSegCase 1.5
+     createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -1053,7 +1049,7 @@ planSegTestCases =
       ]
       (1.48023, 0.79501) (1.48023, 0.89501)
       [0.2, -0.2, -0.1, 0.1]
-    , -}
+    ,
     createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,

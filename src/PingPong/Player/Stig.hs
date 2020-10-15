@@ -829,14 +829,15 @@ stigPlanSeg foot arm s
 
     -- Base to End point of Segment
     onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
-    onlyBatJointBaseToP1Norm = Numerical.norm_2 onlyBatJointBaseToP1
+    (onlyBatJointBaseToP1Normalized, onlyBatJointBaseToP1Norm) = normalize2D onlyBatJointBaseToP1
     onlyBatJointBaseToP1Angle = atan2 (Numerical.atIndex onlyBatJointBaseToP1 1) (Numerical.atIndex onlyBatJointBaseToP1 0)
     onlyBatJointBaseToYAngle = pi/2
 
     onlyBatJointAngleFirstApprox = deltaAngle onlyBatJointBaseToP1Angle onlyBatJointBaseToYAngle
-    onlyBatJointAngleCos = bool (Numerical.dot onlyBatJointBaseToP1 homogeneousVectorY / onlyBatJointBaseToP1Norm) 0 (globalThreshold 0 onlyBatJointBaseToP1Norm == 0)
+    onlyBatJointAngleCos = Numerical.dot onlyBatJointBaseToP1Normalized homogeneousVectorY
     
-    (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
+    -- (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
+    onlyBatJointAngle = atan2 (cross2D onlyBatJointBaseToP1Normalized homogeneousVectorY) onlyBatJointAngleCos
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
     
     -- Check that the bat has the same length as the distance from base to endpoint
@@ -859,14 +860,15 @@ stigPlanSeg foot arm s
 
     -- Vector from small bat to target
     smallBatToP1 = p1 - smallBatGlobal
-    smallBatToP1Norm = Numerical.norm_2 smallBatToP1
+    (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
     smallBatToP1Angle = atan2 (Numerical.atIndex smallBatToP1 1) (Numerical.atIndex smallBatToP1 0)
     smallBatToXAxisAngle = atan2 (Numerical.atIndex smallBatGlobalXAxisNorm 1) (Numerical.atIndex smallBatGlobalXAxisNorm 0)
     jointAngleApprox = deltaAngle smallBatToP1Angle smallBatToXAxisAngle
 
-    smallBatAngleCos = bool (Numerical.dot smallBatToP1 smallBatGlobalXAxisNorm / smallBatToP1Norm) 0 (globalThreshold 0 smallBatToP1Norm == 0)
+    smallBatAngleCos = Numerical.dot smallBatToP1Normalized smallBatGlobalXAxisNorm
     
-    (jointAngle, _) = newtonRaphsonAcos jointAngleApprox smallBatAngleCos
+    --(jointAngle, _) = newtonRaphsonAcos jointAngleApprox smallBatAngleCos
+    jointAngle = atan2 (cross2D smallBatToP1Normalized smallBatGlobalXAxisNorm) smallBatAngleCos
 
     qF = m ++ reverse (setFirstJointRest0 jointAngle firstJointsRev)
 
@@ -885,6 +887,18 @@ stigPlanSeg foot arm s
     -- | Set first joint with a value and the rest is 0 (the arm includes the joint)
     setFirstJointRest0 :: Double -> Arm -> Motion 
     setFirstJointRest0 q as = double2Float q : map (const 0) (tail as)
+
+    -- | 2D Cross Product 
+    cross2D :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
+    cross2D v1 v2 = Numerical.atIndex (Numerical.cross v1 v2) 2
+
+    -- | Normalize 2D Vector
+    normalize2D :: Numerical.Vector Numerical.R -> (Numerical.Vector Numerical.R, Numerical.R)
+    normalize2D v
+      | globalThreshold 0 vNorm == 0 = (homogeneousZero, 0)
+      | otherwise = (v / Numerical.scalar vNorm, vNorm)
+      where
+        vNorm = Numerical.norm_2 v
     
 
 -- | Create a Test Case for stigPlanPnt
@@ -1021,7 +1035,7 @@ testPlanSeg (f, arm, sT, mT)
 planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
 planSegTestCases = 
   [
-    createPlanSegCase 1.5
+    {- createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -1034,7 +1048,7 @@ planSegTestCases =
       ]
       (1.48023, 0.79501) (1.48023, 0.89501)
       [0.2, -0.2, -0.1, 0.1]
-    ,
+    , -}
     createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,

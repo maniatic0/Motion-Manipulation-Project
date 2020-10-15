@@ -310,7 +310,7 @@ stig =
       action = stigAction,
       collide = stigCollide,
       planPnt = stigPlanPnt,
-      planSeg = const $ const $ const [0]
+      planSeg = stigPlanSeg
     }
 
 paleBlue :: Color
@@ -495,6 +495,19 @@ homogeneousZero = homogeneousPoint 0 0
 pointToHomogenousPoint :: Point 2 Float -> Numerical.Vector Numerical.R
 pointToHomogenousPoint p = homogeneousPoint (float2Double $ view xCoord p) (float2Double $ view yCoord p)
 
+-- | Create an homogeneous 2D vector
+homogeneousVector :: Numerical.R -> Numerical.R -> Numerical.Vector Numerical.R
+homogeneousVector x y = Numerical.fromList [x, y, 0]
+
+-- | X Vector
+homogeneousVectorX :: Numerical.Vector Numerical.R
+homogeneousVectorX = homogeneousVector 1 0
+
+-- | Y Vector
+homogeneousVectorY :: Numerical.Vector Numerical.R
+homogeneousVectorY = homogeneousVector 0 1
+
+-- | Homogeneous 2D Identity Matrix
 homogeneousIdent :: Numerical.Matrix Numerical.R
 homogeneousIdent = Numerical.ident 3
 
@@ -614,7 +627,7 @@ getJacobianFromHomogeneousJacobian jH = jH Numerical.?? (Numerical.DropLast 1, N
 
 -- | Newton Raphson Threshold
 newtonRaphsonThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
-newtonRaphsonThreshold = threshold 0.000001
+newtonRaphsonThreshold = threshold 0.0000001
 
 -- | Calculates a Newton-Raphson IK step (if singular it fails). Returns the new Joints and its error agains target
 -- a : Arm Description.
@@ -737,6 +750,96 @@ stigPlanPnt foot arm p
     q = motionToJointVector m
     (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q
 
+-- | Calculates the possible motion values to achieve a line segment. If it fails it returns []
+stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
+stigPlanSeg foot arm s
+  | isOnlyBat = trace ("Weird Only Bat Case") [] -- No idea if we reach it because we can't move
+  | isOnlyBatJoint = trace ("Weird Only Bat and Joint Case") $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
+  | normalCheck = trace ("Converges " ++ show (qF, eB)) $ map normalizeAngle $ qF
+  | otherwise = trace ("Failed to converge " ++ show (qB, eB, smallBatToP1Norm, batLength)) $ []
+  where
+    -- Target Info
+    startPoint = s ^. (start . core)
+    p0 = pointToHomogenousPoint startPoint
+    endPoint = s ^. (end . core)
+    p1 = pointToHomogenousPoint endPoint
+
+    -- Simplifyied arm
+    simplerArm = simplifyArm arm
+
+    -- Fix the bat and all the joints until a new
+    revArm = reverse simplerArm -- Inverted arm with the bat at the start 
+    bat = head revArm -- The first one is the Bat for segment
+    batLength = getLinkLength bat -- Bat Length
+
+    -- Batless arm. The first element is a joint (or nothing)
+    restArmRev = tail revArm 
+
+    -- Joints between original bat and the next link to use as a bat for the rest
+    firstJointsRev = takeWhile (isJoint) restArmRev 
+
+    -- The arm is a bat (or can be simplified to that) and nothing else
+    isOnlyBat = null firstJointsRev
+
+    -- Small arm with a bat for first link. Note that it can be empty
+    smallRev = dropWhile (isJoint) restArmRev
+
+    -- Small from base to new bat
+    smallArm = reverse smallRev
+
+    -- The arm is a bat and a joint (or can be simplified to that) and nothing else
+    isOnlyBatJoint = null smallArm
+
+    -- Base to End point of Segment
+    onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
+    onlyBatJointBaseToP1Norm = Numerical.norm_2 onlyBatJointBaseToP1
+    onlyBatJointAngle 
+      = bool 0 (acos((Numerical.dot onlyBatJointBaseToP1 homogeneousVectorY) / onlyBatJointBaseToP1Norm)) (onlyBatJointBaseToP1Norm > 0)
+    onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
+    
+    -- Check that the bat has the same length as the distance from base to endpoint
+    onlyBatJointCheck = (globalThreshold 0 ((float2Double batLength) - onlyBatJointBaseToP1Norm) == 0)
+    
+    -- From here we are in a normal case we have at least this form: link (bat) -- joint -- link -- base
+    -- Small Arm must reach the start point of segment
+    (a, m) = getArmKinematicAndMotion foot smallArm
+    q = motionToJointVector m
+    (qB, eB) = newtonRaphsonIK a (homogeneousZero, p0) q
+
+    -- Small Arm Forward Transforms
+    fwdTB = applyForwardKinematicTrans a qB
+    fwdTBMat = applyForwardKinematicMatrixTrans fwdTB
+
+    -- Small Bat Global Position
+    smallBatGlobal = fwdTBMat Numerical.#> homogeneousZero
+    smallBatGlobalXAxis = fwdTBMat Numerical.#> homogeneousVectorX
+    smallBatGlobalXAxisNorm = smallBatGlobalXAxis / Numerical.scalar(Numerical.norm_2 smallBatGlobalXAxis)
+
+    -- Vector from small bat to target
+    smallBatToP1 = p1 - smallBatGlobal
+    smallBatToP1Norm = Numerical.norm_2 smallBatToP1
+    jointAngle 
+      = bool (0) (acos((Numerical.dot smallBatToP1 smallBatGlobalXAxisNorm) / smallBatToP1Norm)) (smallBatToP1Norm > 0)
+
+    qF = m ++ (reverse $ setFirstJointRest0 jointAngle firstJointsRev)
+
+    -- Check that small bat is at p0 and that we can reach p1
+    normalCheck = globalThreshold 0 eB == 0 && (globalThreshold 0 ((float2Double batLength) - smallBatToP1Norm) == 0)
+
+    -- | If an Element is a joint
+    isJoint :: Element -> Bool
+    isJoint (Joint _ _) = True
+    isJoint _ = False
+
+    -- | Get Link Length
+    getLinkLength :: Element -> Float
+    getLinkLength (Link _ t) = t
+
+    -- | Set first joint with a value and the rest is 0 (the arm includes the joint)
+    setFirstJointRest0 :: Double -> Arm -> Motion 
+    setFirstJointRest0 q as = (double2Float q) : map (const 0) (tail as)
+    
+
 -- | Create a Test Case for stigPlanPnt
 createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
 createPlanPntCase f a (xT, yT) m = (f, a, Point2 xT yT, m)
@@ -824,5 +927,5 @@ planPntTestCases =
   ]
 
 -- | Executes testPlanPnt
-executePlanPntTestCases :: [Bool]
-executePlanPntTestCases = map testPlanPnt planPntTestCases
+executePlanPntTestCases :: Bool
+executePlanPntTestCases = all testPlanPnt planPntTestCases

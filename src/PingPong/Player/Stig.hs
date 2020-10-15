@@ -678,16 +678,16 @@ newtonRaphsonStep a q xLocal xTargetGlobal
     singular = Numerical.rank jH < 2 && newtonRaphsonThreshold 0 dqNorm == 0
 
 -- | Maximum Newton Raphson Step
-newtonRaphsonIKMaxStep :: Int
-newtonRaphsonIKMaxStep = 10000
+newtonRaphsonMaxStep :: Int
+newtonRaphsonMaxStep = 10000
 
 -- | Really Bad Step
-newtonRaphsonIKBadStep :: forall a. Floating a => a
-newtonRaphsonIKBadStep = 10
+newtonRaphsonBadStep :: forall a. Floating a => a
+newtonRaphsonBadStep = 10
 
 -- | When to do a random Restart Newton Raphson Step
-newtonRaphsonIKMaxRandomRestartStep :: Int
-newtonRaphsonIKMaxRandomRestartStep = round (fromIntegral newtonRaphsonIKMaxStep / 10)
+newtonRaphsonMaxRandomRestartStep :: Int
+newtonRaphsonMaxRandomRestartStep = round (fromIntegral newtonRaphsonMaxStep / 10)
 
 -- | NewtonRaphson Loop Iteration
 newtonRaphsonIKIter ::
@@ -699,7 +699,7 @@ newtonRaphsonIKIter ::
   (Numerical.Vector Numerical.R, Numerical.R) ->
   (Numerical.Vector Numerical.R, Numerical.R)
 newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
-  | i >= newtonRaphsonIKMaxStep = trace ("Limit " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
+  | i >= newtonRaphsonMaxStep = trace ("Limit " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
   | newtonRaphsonThreshold 0 eBest == 0 = trace ("Perfect " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
   | singular = trace ("Singular " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
   | needReset = trace ("Need Reset " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
@@ -720,7 +720,7 @@ newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
 
     (qN, eN) = fromJust step
 
-    needReset = eN >= eBest * newtonRaphsonIKBadStep && j >= newtonRaphsonIKMaxRandomRestartStep
+    needReset = eN >= eBest * newtonRaphsonBadStep && j >= newtonRaphsonMaxRandomRestartStep
 
 -- | Newton Raphson IK Algorithm
 newtonRaphsonIK ::
@@ -749,6 +749,43 @@ stigPlanPnt foot arm p
     (a, m) = getArmKinematicAndMotion foot arm
     q = motionToJointVector m
     (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q
+
+-- Calculates newton raphson step to approximate acos
+newtonRaphsonAcosStep :: Int -> Int -> Double -> (Double, Double) -> Double -> (Double, Double)
+newtonRaphsonAcosStep i j q (qB, eB) t
+  | i == newtonRaphsonMaxStep = (qB, eB)
+  | newtonRaphsonThreshold 0 eB == 0 = trace (show (qB, eB)) (qB, eB)
+  | isSingular || needReset = newtonRaphsonAcosStep (i+1) 0 qR (qB, eB) t
+  | eN < eB = trace ("New Best Angle " ++ show (qN, eN)) newtonRaphsonAcosStep (i+1) (j+1) qN (qN, eN) t
+  | otherwise = newtonRaphsonAcosStep (i+1) (j+1) qN (qB, eB) t
+  where
+    -- Calculate derivative and function
+    f = t - cos q
+    fDeriv = sin q
+
+    -- Check if we are in a singularity
+    isSingular = newtonRaphsonThreshold 0 fDeriv == 0
+
+    -- Step
+    qN = normalizeAngle $ q - f / fDeriv
+
+    -- New Error
+    eN = t - cos qN
+
+    -- Random Restarts
+    needReset = eN >= eB * newtonRaphsonBadStep && j >= newtonRaphsonMaxRandomRestartStep
+
+    pseudoInt = round $ fromIntegral i ** (q * qB * bool (eB + 1) (1 / eB) (eB < 1 && 0 < eB))
+    randNum = Numerical.atIndex (Numerical.randomVector pseudoInt Numerical.Uniform 1) 0
+    qR =  pi / 2 * (2 * randNum - 1)
+
+-- | Approximate Acos with newton raphson
+newtonRaphsonAcos :: Double -> Double -> (Double, Double)
+newtonRaphsonAcos q t = newtonRaphsonAcosStep 0 0 qN (qN, eN) t
+  where
+    qN = normalizeAngle q
+    eN = t - cos qN
+
 
 -- | Calculates the possible motion values to achieve a line segment. If it fails it returns []
 stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
@@ -795,8 +832,11 @@ stigPlanSeg foot arm s
     onlyBatJointBaseToP1Norm = Numerical.norm_2 onlyBatJointBaseToP1
     onlyBatJointBaseToP1Angle = atan2 (Numerical.atIndex onlyBatJointBaseToP1 1) (Numerical.atIndex onlyBatJointBaseToP1 0)
     onlyBatJointBaseToYAngle = pi/2
+
+    onlyBatJointAngleFirstApprox = deltaAngle onlyBatJointBaseToP1Angle onlyBatJointBaseToYAngle
+    onlyBatJointAngleCos = bool (Numerical.dot onlyBatJointBaseToP1 homogeneousVectorY / onlyBatJointBaseToP1Norm) 0 (globalThreshold 0 onlyBatJointBaseToP1Norm == 0)
     
-    onlyBatJointAngle = deltaAngle onlyBatJointBaseToP1Angle onlyBatJointBaseToYAngle
+    (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
     
     -- Check that the bat has the same length as the distance from base to endpoint
@@ -822,7 +862,11 @@ stigPlanSeg foot arm s
     smallBatToP1Norm = Numerical.norm_2 smallBatToP1
     smallBatToP1Angle = atan2 (Numerical.atIndex smallBatToP1 1) (Numerical.atIndex smallBatToP1 0)
     smallBatToXAxisAngle = atan2 (Numerical.atIndex smallBatGlobalXAxisNorm 1) (Numerical.atIndex smallBatGlobalXAxisNorm 0)
-    jointAngle = deltaAngle smallBatToP1Angle smallBatToXAxisAngle
+    jointAngleApprox = deltaAngle smallBatToP1Angle smallBatToXAxisAngle
+
+    smallBatAngleCos = bool (Numerical.dot smallBatToP1 smallBatGlobalXAxisNorm / smallBatToP1Norm) 0 (globalThreshold 0 smallBatToP1Norm == 0)
+    
+    (jointAngle, _) = newtonRaphsonAcos jointAngleApprox smallBatAngleCos
 
     qF = m ++ reverse (setFirstJointRest0 jointAngle firstJointsRev)
 
@@ -977,7 +1021,7 @@ testPlanSeg (f, arm, sT, mT)
 planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
 planSegTestCases = 
   [
-   {-  createPlanSegCase 1.5
+    createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -990,7 +1034,7 @@ planSegTestCases =
       ]
       (1.48023, 0.79501) (1.48023, 0.89501)
       [0.2, -0.2, -0.1, 0.1]
-    , -}
+    ,
     createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,

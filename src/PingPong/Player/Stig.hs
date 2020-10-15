@@ -798,8 +798,8 @@ stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
 stigPlanSeg foot arm s
   | isOnlyBat = trace ("Weird Only Bat Case") [] -- No idea if we reach it because we can't move
   | isOnlyBatJoint = trace ("Weird Only Bat and Joint Case") $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
-  | normalCheck = trace ("Converges " ++ show (qF, eB)) $ map normalizeAngle qF
-  | otherwise = trace ("Failed to converge " ++ show (qB, eB, smallBatToP1Norm, batLength)) $ []
+  | normalCheck = trace ("Converges " ++ show (qF, eB, eBat)) $ map normalizeAngle qF
+  | otherwise = trace ("Failed to converge " ++ show (qB, eB, eBat, smallBatToP1Norm, batLength)) $ []
   where
     -- Target Info
     startPoint = s ^. (start . core)
@@ -836,11 +836,9 @@ stigPlanSeg foot arm s
     -- Base to End point of Segment
     onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
     (onlyBatJointBaseToP1Normalized, onlyBatJointBaseToP1Norm) = normalize2D onlyBatJointBaseToP1
-
-    onlyBatJointAngleCos = Numerical.dot onlyBatJointBaseToP1Normalized homogeneousVectorY
     
     -- (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
-    onlyBatJointAngle = atan2 (cross2D onlyBatJointBaseToP1Normalized homogeneousVectorY) onlyBatJointAngleCos
+    onlyBatJointAngle = angleVector homogeneousVectorY onlyBatJointBaseToP1Normalized
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
     
     -- Check that the bat has the same length as the distance from base to endpoint
@@ -864,13 +862,16 @@ stigPlanSeg foot arm s
     smallBatToP1 = p1Local - homogeneousZero
     (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
 
-    smallBatAngle = angleVector smallBatToP1Normalized homogeneousVectorX
+    smallBatAngle = angleVector homogeneousVectorX smallBatToP1Normalized 
 
     qF = mB ++ reverse (setFirstJointRest0 smallBatAngle firstJointsRev)
 
+    endP = rotateTrans smallBatAngle Numerical.#> homogeneousPoint (float2Double batLength) 0
+    eBat = Numerical.norm_2 (p1Local - endP)
+
     -- Check that small bat is at p0 and that we can reach p1
     normalCheck = globalThreshold 0 eB == 0 
-      -- && globalThreshold 0 eBat == 0 
+      && globalThreshold 0 eBat == 0 
       && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
 
     -- | If an Element is a joint
@@ -1030,7 +1031,8 @@ testPlanSeg (f, arm, sT, mT)
     eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
     eNormT = Numerical.norm_2 eT
 
-    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) 
+      && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
 
 -- | Test Cases for testPlanPnt
 planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]

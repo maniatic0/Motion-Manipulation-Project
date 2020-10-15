@@ -683,7 +683,7 @@ newtonRaphsonMaxStep = 10000
 
 -- | Really Bad Step
 newtonRaphsonBadStep :: forall a. Floating a => a
-newtonRaphsonBadStep = 10
+newtonRaphsonBadStep = 2
 
 -- | When to do a random Restart Newton Raphson Step
 newtonRaphsonMaxRandomRestartStep :: Int
@@ -720,7 +720,13 @@ newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
 
     (qN, eN) = fromJust step
 
-    needReset = eN >= eBest * newtonRaphsonBadStep && j >= newtonRaphsonMaxRandomRestartStep
+    needReset = 
+      (
+        eN >= ((eBest / (1 + fromIntegral j)) * newtonRaphsonBadStep)
+        || (newtonRaphsonThreshold 0 (Numerical.norm_2 (qN - q)) == 0)
+      )
+      && j >= newtonRaphsonMaxRandomRestartStep
+
 
 -- | Newton Raphson IK Algorithm
 newtonRaphsonIK ::
@@ -792,7 +798,7 @@ stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
 stigPlanSeg foot arm s
   | isOnlyBat = trace ("Weird Only Bat Case") [] -- No idea if we reach it because we can't move
   | isOnlyBatJoint = trace ("Weird Only Bat and Joint Case") $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
-  | normalCheck = trace ("Converges " ++ show (qF, eB)) $ map normalizeAngle $ qF
+  | normalCheck = trace ("Converges " ++ show (qF, eB, eBat)) $ map normalizeAngle qF
   | otherwise = trace ("Failed to converge " ++ show (qB, eB, smallBatToP1Norm, batLength)) $ []
   where
     -- Target Info
@@ -830,10 +836,7 @@ stigPlanSeg foot arm s
     -- Base to End point of Segment
     onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
     (onlyBatJointBaseToP1Normalized, onlyBatJointBaseToP1Norm) = normalize2D onlyBatJointBaseToP1
-    onlyBatJointBaseToP1Angle = atan2 (Numerical.atIndex onlyBatJointBaseToP1 1) (Numerical.atIndex onlyBatJointBaseToP1 0)
-    onlyBatJointBaseToYAngle = pi/2
 
-    onlyBatJointAngleFirstApprox = deltaAngle onlyBatJointBaseToP1Angle onlyBatJointBaseToYAngle
     onlyBatJointAngleCos = Numerical.dot onlyBatJointBaseToP1Normalized homogeneousVectorY
     
     -- (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
@@ -848,32 +851,31 @@ stigPlanSeg foot arm s
     (a, m) = getArmKinematicAndMotion foot smallArm
     q = motionToJointVector m
     (qB, eB) = newtonRaphsonIK a (homogeneousZero, p0) q
+    mB = jointVectorToMotion qB
 
     -- Small Arm Forward Transforms
-    fwdTB = applyForwardKinematicTrans a qB
-    fwdTBMat = applyForwardKinematicMatrixTrans fwdTB
+    fwdTIB = applyForwardKinematicTransInv a qB
+    fwdTBMatInv = applyForwardKinematicMatrixTransInv fwdTIB
 
-    -- Small Bat Global Position
-    smallBatGlobal = fwdTBMat Numerical.#> homogeneousZero
-    smallBatGlobalXAxis = fwdTBMat Numerical.#> homogeneousVectorX
-    smallBatGlobalXAxisNorm = smallBatGlobalXAxis / Numerical.scalar(Numerical.norm_2 smallBatGlobalXAxis)
+    -- p1Local Position
+    p1Local = fwdTBMatInv Numerical.#> p1
 
     -- Vector from small bat to target
-    smallBatToP1 = p1 - smallBatGlobal
-    (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
-    smallBatToP1Angle = atan2 (Numerical.atIndex smallBatToP1 1) (Numerical.atIndex smallBatToP1 0)
-    smallBatToXAxisAngle = atan2 (Numerical.atIndex smallBatGlobalXAxisNorm 1) (Numerical.atIndex smallBatGlobalXAxisNorm 0)
-    jointAngleApprox = deltaAngle smallBatToP1Angle smallBatToXAxisAngle
+    smallBatToP1 = p1Local - homogeneousZero
+    smallBatToP1Norm = Numerical.norm_2 smallBatToP1
 
-    smallBatAngleCos = Numerical.dot smallBatToP1Normalized smallBatGlobalXAxisNorm
-    
-    --(jointAngle, _) = newtonRaphsonAcos jointAngleApprox smallBatAngleCos
-    jointAngle = atan2 (cross2D smallBatToP1Normalized smallBatGlobalXAxisNorm) smallBatAngleCos
+    batArm = reverse $ bat:firstJointsRev
+    (aBat, mBat) = getArmKinematicAndMotion 0 batArm
 
-    qF = m ++ reverse (setFirstJointRest0 jointAngle firstJointsRev)
+    qBat = motionToJointVector mBat
+    (qBestBat, eBat) = newtonRaphsonIK aBat (homogeneousZero, (rotateTrans (-pi/2)) Numerical.#> p1Local) qBat
+
+    qF = mB ++ jointVectorToMotion qBestBat
 
     -- Check that small bat is at p0 and that we can reach p1
-    normalCheck = globalThreshold 0 eB == 0 && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
+    normalCheck = globalThreshold 0 eB == 0 
+      -- && globalThreshold 0 eBat == 0 
+      && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
 
     -- | If an Element is a joint
     isJoint :: Element -> Bool
@@ -899,6 +901,9 @@ stigPlanSeg foot arm s
       | otherwise = (v / Numerical.scalar vNorm, vNorm)
       where
         vNorm = Numerical.norm_2 v
+
+    angleVector :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
+    angleVector v1 v2 = atan2 (cross2D v1 v2) (Numerical.dot v1 v2)
     
 
 -- | Create a Test Case for stigPlanPnt
@@ -1035,7 +1040,7 @@ testPlanSeg (f, arm, sT, mT)
 planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
 planSegTestCases = 
   [
-    {- createPlanSegCase 1.5
+     {- createPlanSegCase 1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,

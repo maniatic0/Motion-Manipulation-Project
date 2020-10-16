@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig where --(stig)
+module PingPong.Player.Stig(stig) where
 
 import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
@@ -699,12 +699,12 @@ newtonRaphsonIKIter ::
   (Numerical.Vector Numerical.R, Numerical.R) ->
   (Numerical.Vector Numerical.R, Numerical.R)
 newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
-  | i >= newtonRaphsonMaxStep = trace ("Limit " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
-  | newtonRaphsonThreshold 0 eBest == 0 = trace ("Perfect " ++ show i ++ " " ++ show (qBest, eBest)) $ (qBest, eBest)
-  | singular = trace ("Singular " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
-  | needReset = trace ("Need Reset " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
-  | eN < eBest = trace ("New Best " ++ show i ++ " " ++ show (qN, eN)) $ newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qN, eN)
-  | otherwise = trace ("Step " ++ show i ++ " " ++ show (qBest, eBest)) $ newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
+  | i >= newtonRaphsonMaxStep = (qBest, eBest)
+  | newtonRaphsonThreshold 0 eBest == 0 = (qBest, eBest)
+  | singular = newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | needReset = newtonRaphsonIKIter (i + 1) 0 a (xLocal, xTargetGlobal) qR (qBest, eBest)
+  | eN < eBest = newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qN, eN)
+  | otherwise = newtonRaphsonIKIter (i + 1) (j + 1) a (xLocal, xTargetGlobal) qN (qBest, eBest)
   where
     -- Random Vector
     qSize = Numerical.size q
@@ -720,13 +720,11 @@ newtonRaphsonIKIter i j a (xLocal, xTargetGlobal) q (qBest, eBest)
 
     (qN, eN) = fromJust step
 
-    needReset = 
-      (
-        eN >= ((eBest / (1 + fromIntegral j)) * newtonRaphsonBadStep)
-        || (newtonRaphsonThreshold 0 (Numerical.norm_2 (qN - q)) == 0)
+    needReset =
+      ( eN >= ((eBest / (1 + fromIntegral j)) * newtonRaphsonBadStep)
+          || (newtonRaphsonThreshold 0 (Numerical.norm_2 (qN - q)) == 0)
       )
-      && j >= newtonRaphsonMaxRandomRestartStep
-
+        && j >= newtonRaphsonMaxRandomRestartStep
 
 -- | Newton Raphson IK Algorithm
 newtonRaphsonIK ::
@@ -749,8 +747,8 @@ newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 0 a (xLocal,
 -- | Calculates the possible motion values to achieve a point. If it fails it returns []
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> Motion
 stigPlanPnt foot arm p
-  | globalThreshold 0 eB == 0 = trace ("Converges " ++ show (qB, eB)) $ map normalizeAngle $ jointVectorToMotion qB
-  | otherwise = trace ("Failed to converge " ++ show (qB, eB)) $ []
+  | globalThreshold 0 eB == 0 = map normalizeAngle $ jointVectorToMotion qB
+  | otherwise = []
   where
     (a, m) = getArmKinematicAndMotion foot arm
     q = motionToJointVector m
@@ -760,10 +758,10 @@ stigPlanPnt foot arm p
 newtonRaphsonAcosStep :: Int -> Int -> Double -> (Double, Double) -> Double -> (Double, Double)
 newtonRaphsonAcosStep i j q (qB, eB) t
   | i == newtonRaphsonMaxStep = (qB, eB)
-  | newtonRaphsonThreshold 0 eB == 0 = trace (show (qB, eB)) (qB, eB)
-  | isSingular || needReset = newtonRaphsonAcosStep (i+1) 0 qR (qB, eB) t
-  | eN < eB = trace ("New Best Angle " ++ show (qN, eN)) newtonRaphsonAcosStep (i+1) (j+1) qN (qN, eN) t
-  | otherwise = newtonRaphsonAcosStep (i+1) (j+1) qN (qB, eB) t
+  | newtonRaphsonThreshold 0 eB == 0 = (qB, eB)
+  | isSingular || needReset = newtonRaphsonAcosStep (i + 1) 0 qR (qB, eB) t
+  | eN < eB = newtonRaphsonAcosStep (i + 1) (j + 1) qN (qN, eN) t
+  | otherwise = newtonRaphsonAcosStep (i + 1) (j + 1) qN (qB, eB) t
   where
     -- Calculate derivative and function
     f = t - cos q
@@ -783,7 +781,7 @@ newtonRaphsonAcosStep i j q (qB, eB) t
 
     pseudoInt = round $ fromIntegral i ** (q * qB * bool (eB + 1) (1 / eB) (eB < 1 && 0 < eB))
     randNum = Numerical.atIndex (Numerical.randomVector pseudoInt Numerical.Uniform 1) 0
-    qR =  pi / 2 * (2 * randNum - 1)
+    qR = pi / 2 * (2 * randNum - 1)
 
 -- | Approximate Acos with newton raphson
 newtonRaphsonAcos :: Double -> Double -> (Double, Double)
@@ -792,14 +790,13 @@ newtonRaphsonAcos q t = newtonRaphsonAcosStep 0 0 qN (qN, eN) t
     qN = normalizeAngle q
     eN = t - cos qN
 
-
 -- | Calculates the possible motion values to achieve a line segment. If it fails it returns []
 stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> Motion
 stigPlanSeg foot arm s
-  | isOnlyBat = trace ("Weird Only Bat Case") [] -- No idea if we reach it because we can't move
-  | isOnlyBatJoint = trace ("Weird Only Bat and Joint Case") $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
-  | normalCheck = trace ("Converges " ++ show (qF, eB, eBat)) $ map normalizeAngle qF
-  | otherwise = trace ("Failed to converge " ++ show (qB, eB, eBat, smallBatToP1Norm, batLength)) $ []
+  | isOnlyBat = [] -- No idea if we reach it because we can't move
+  | isOnlyBatJoint = bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
+  | normalCheck = map normalizeAngle qF
+  | otherwise = []
   where
     -- Target Info
     startPoint = s ^. (start . core)
@@ -811,15 +808,15 @@ stigPlanSeg foot arm s
     simplerArm = simplifyArm arm
 
     -- Fix the bat and all the joints until a new
-    revArm = reverse simplerArm -- Inverted arm with the bat at the start 
+    revArm = reverse simplerArm -- Inverted arm with the bat at the start
     bat = head revArm -- The first one is the Bat for segment
     batLength = getLinkLength bat -- Bat Length
 
     -- Batless arm. The first element is a joint (or nothing)
-    restArmRev = tail revArm 
+    restArmRev = tail revArm
 
     -- Joints between original bat and the next link to use as a bat for the rest
-    firstJointsRev = takeWhile isJoint restArmRev 
+    firstJointsRev = takeWhile isJoint restArmRev
 
     -- The arm is a bat (or can be simplified to that) and nothing else
     isOnlyBat = null firstJointsRev
@@ -836,14 +833,14 @@ stigPlanSeg foot arm s
     -- Base to End point of Segment
     onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
     (onlyBatJointBaseToP1Normalized, onlyBatJointBaseToP1Norm) = normalize2D onlyBatJointBaseToP1
-    
+
     -- (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
     onlyBatJointAngle = angleVector homogeneousVectorY onlyBatJointBaseToP1Normalized
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
-    
+
     -- Check that the bat has the same length as the distance from base to endpoint
     onlyBatJointCheck = globalThreshold 0 (float2Double batLength - onlyBatJointBaseToP1Norm) == 0
-    
+
     -- From here we are in a normal case we have at least this form: link (bat) -- joint -- link -- base
     -- Small Arm must reach the start point of segment
     (a, m) = getArmKinematicAndMotion foot smallArm
@@ -862,7 +859,7 @@ stigPlanSeg foot arm s
     smallBatToP1 = p1Local - homogeneousZero
     (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
 
-    smallBatAngle = angleVector homogeneousVectorX smallBatToP1Normalized 
+    smallBatAngle = angleVector homogeneousVectorX smallBatToP1Normalized
 
     qF = mB ++ reverse (setFirstJointRest0 smallBatAngle firstJointsRev)
 
@@ -870,28 +867,20 @@ stigPlanSeg foot arm s
     eBat = Numerical.norm_2 (p1Local - endP)
 
     -- Check that small bat is at p0 and that we can reach p1
-    normalCheck = globalThreshold 0 eB == 0 
-      && globalThreshold 0 eBat == 0 
-      && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
+    normalCheck =
+      globalThreshold 0 eB == 0
+        && globalThreshold 0 eBat == 0
+        && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
 
-    -- | If an Element is a joint
     isJoint :: Element -> Bool
     isJoint (Joint _ _) = True
     isJoint _ = False
-
-    -- | Get Link Length
     getLinkLength :: Element -> Float
     getLinkLength (Link _ t) = t
-
-    -- | Set first joint with a value and the rest is 0 (the arm includes the joint)
-    setFirstJointRest0 :: Double -> Arm -> Motion 
+    setFirstJointRest0 :: Double -> Arm -> Motion
     setFirstJointRest0 q as = double2Float q : map (const 0) (tail as)
-
-    -- | 2D Cross Product 
     cross2D :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
     cross2D v1 v2 = Numerical.atIndex (Numerical.cross v1 v2) 2
-
-    -- | Normalize 2D Vector
     normalize2D :: Numerical.Vector Numerical.R -> (Numerical.Vector Numerical.R, Numerical.R)
     normalize2D v
       | globalThreshold 0 vNorm == 0 = (homogeneousZero, 0)
@@ -901,7 +890,6 @@ stigPlanSeg foot arm s
 
     angleVector :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
     angleVector v1 v2 = atan2 (cross2D v1 v2) (Numerical.dot v1 v2)
-    
 
 -- | Create a Test Case for stigPlanPnt
 createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
@@ -945,8 +933,8 @@ testPlanPnt (f, arm, pT, mT)
 -- | Test Cases for testPlanPnt
 planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
 planPntTestCases =
-  [
-    createPlanPntCase 1.5
+  [ createPlanPntCase
+      1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -958,9 +946,9 @@ planPntTestCases =
         Link red 0.1
       ]
       (1.22385, 0.80917)
-      [0.1, 0.2, 0.3, 0.4]
-    ,
-    createPlanPntCase 1.5
+      [0.1, 0.2, 0.3, 0.4],
+    createPlanPntCase
+      1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -972,9 +960,9 @@ planPntTestCases =
         Link red 0.1
       ]
       (1.77615, 0.80917)
-      [-0.5, 0.0, 0.4, 0.6]
-    ,
-    createPlanPntCase 1.5
+      [-0.5, 0.0, 0.4, 0.6],
+    createPlanPntCase
+      1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -1007,7 +995,7 @@ testPlanSeg (f, arm, sT, mT)
     -- Expected Position
     pT = sT ^. (end . core)
     qT = motionToJointVector mT
-    xTargetGlobal = pointToHomogenousPoint pT 
+    xTargetGlobal = pointToHomogenousPoint pT
 
     -- Arm
     (a, _) = getArmKinematicAndMotion f arm
@@ -1031,14 +1019,16 @@ testPlanSeg (f, arm, sT, mT)
     eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
     eNormT = Numerical.norm_2 eT
 
-    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) 
-      && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
+    result =
+      trace ("Target " ++ show (batGlobalT, eNormT)) $
+        (globalThreshold 0 eNormB == 0)
+          && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
 
 -- | Test Cases for testPlanPnt
-planSegTestCases :: [(Float, Arm,LineSegment 2 () Float, Motion)]
-planSegTestCases = 
-  [
-     createPlanSegCase 1.5
+planSegTestCases :: [(Float, Arm, LineSegment 2 () Float, Motion)]
+planSegTestCases =
+  [ createPlanSegCase
+      1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -1049,10 +1039,11 @@ planSegTestCases =
         Joint red 0.0,
         Link red 0.1
       ]
-      (1.48023, 0.79501) (1.48023, 0.89501)
-      [0.2, -0.2, -0.1, 0.1]
-    ,
-    createPlanSegCase 1.5
+      (1.48023, 0.79501)
+      (1.48023, 0.89501)
+      [0.2, -0.2, -0.1, 0.1],
+    createPlanSegCase
+      1.5
       [ Link red 0.2,
         Joint red 0.0,
         Link red 0.2,
@@ -1063,7 +1054,8 @@ planSegTestCases =
         Joint red 0.0,
         Link red 0.1
       ]
-      (1.71174, 0.75003) (1.66379, 0.83779)
+      (1.71174, 0.75003)
+      (1.66379, 0.83779)
       [-0.5, 0.0, 0.4, 0.6]
   ]
 

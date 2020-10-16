@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig -- (stig) 
+module PingPong.Player.Stig (stig) 
   where
 
 import Control.Lens (view, (&), (.~), (^.))

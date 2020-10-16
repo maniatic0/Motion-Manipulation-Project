@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig(stig) where
+module PingPong.Player.Stig -- (stig) 
+  where
 
 import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
@@ -744,10 +745,14 @@ newtonRaphsonIK a (xLocal, xTargetGlobal) q = newtonRaphsonIKIter 0 0 a (xLocal,
     e = xTargetGlobal - batGlobal
     eNorm = Numerical.norm_2 e
 
+-- | Stig Plan Threshold
+stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
+stigPlanThreshold = threshold 0.01 
+
 -- | Calculates the possible motion values to achieve a point. If it fails it returns []
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> Motion
 stigPlanPnt foot arm p
-  | globalThreshold 0 eB == 0 = map normalizeAngle $ jointVectorToMotion qB
+  | stigPlanThreshold 0 eB == 0 = map normalizeAngle $ jointVectorToMotion qB
   | otherwise = []
   where
     (a, m) = getArmKinematicAndMotion foot arm
@@ -839,7 +844,7 @@ stigPlanSeg foot arm s
     onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
 
     -- Check that the bat has the same length as the distance from base to endpoint
-    onlyBatJointCheck = globalThreshold 0 (float2Double batLength - onlyBatJointBaseToP1Norm) == 0
+    onlyBatJointCheck = stigPlanThreshold 0 (float2Double batLength - onlyBatJointBaseToP1Norm) == 0
 
     -- From here we are in a normal case we have at least this form: link (bat) -- joint -- link -- base
     -- Small Arm must reach the start point of segment
@@ -868,9 +873,9 @@ stigPlanSeg foot arm s
 
     -- Check that small bat is at p0 and that we can reach p1
     normalCheck =
-      globalThreshold 0 eB == 0
-        && globalThreshold 0 eBat == 0
-        && (globalThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
+      stigPlanThreshold 0 eB == 0
+        && stigPlanThreshold 0 eBat == 0
+        && (stigPlanThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
 
     isJoint :: Element -> Bool
     isJoint (Joint _ _) = True

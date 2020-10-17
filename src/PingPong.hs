@@ -16,6 +16,4 @@ players :: [Player]
 players = [mrStiff, msWavy, stig]
 
 main :: IO ()
---main = play mrStiff msWavy
---main = play msWavy msWavy
 main = play stig msWavy

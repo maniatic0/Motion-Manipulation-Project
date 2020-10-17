@@ -14,50 +14,84 @@ import Graphics.Gloss (Color)
 
 data Element = Link Color Float
              | Joint Color Float
+  deriving (Show, Eq)
 
 type Arm = [Element]
 
 data BallState = BallState
   { loc :: Point 2 Float
   , dir :: Vector 2 Float
-  }
+  } deriving (Show, Eq)
 
 data Player = Player 
   { name    :: String  
   , arm     :: Arm
   , foot    :: Float
-  , action  :: BallState -> Arm -> IO Motion
+  , prepare :: IO ()
+  , action  :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
   , collide :: (Float, Point 2 Float, LineSegment 2 () Float) 
             -> (Float, Point 2 Float, LineSegment 2 () Float) 
-            -> Point 2 Float
-  , planPnt :: Float -> Arm -> Point 2 Float -> [Float]
-  , planSeg :: Float -> Arm -> LineSegment 2 () Float -> [Float]
+            -> IO (Point 2 Float)
+  , planPnt :: Float -> Arm -> Point 2 Float -> IO [Float]
+  , planSeg :: Float -> Arm -> LineSegment 2 () Float -> IO [Float]
   }
 
 
 type Motion = [Float] -- speed in radians per second at which joints should move
 
+-- | Data type describing the last thing hit by the ball
+data Item = Air | Bat Owner | Table Owner | Other Int deriving (Show, Eq, Ord)
 
-
+data Owner = Self | Opponent deriving (Show, Eq, Ord)
 
 data State = State
   { time   :: Float -- time elapsed since the start of the game
+  , frame  :: Int   -- number of frames since the start of the game
+  , score  :: (Int, Int)
   , ball   :: BallState
-  , hit    :: (Float, Int) -- time and index of last collision
+  , hit    :: (Float, Item) -- time and index of last collision
   , p1, p2 :: Player
   , m1, m2 :: Motion -- current motion (until next frame)
-  -- TODO: current score, whose turn is it, what was the last thing the ball hit
   }
+
+-- | Change state from the perspective of p1 to the perspective of p2.
+flipState :: State -> State
+flipState st = st { ball = flipBall $ ball st
+                  , hit = (fst $ hit st, flipItem $ snd $ hit st)
+                  , p1 = p2 st
+                  , p2 = p1 st
+                  , m1 = flipMotion $ m2 st
+                  , m2 = flipMotion $ m1 st
+                  }
+
+flipBall :: BallState -> BallState
+flipBall st = st { loc = transformBy reflectionH $ loc st
+                 , dir = transformBy reflectionH $ dir st
+                 }
+
+flipMotion :: Motion -> Motion
+flipMotion = map negate
+
+flipItem :: Item -> Item
+flipItem (Bat   o) = Bat   $ flipOwner o
+flipItem (Table o) = Table $ flipOwner o
+flipItem o         = o
+
+flipOwner :: Owner -> Owner
+flipOwner Self = Opponent
+flipOwner Opponent = Self
 
 defState :: State
 defState = State
-  { time = 0
-  , ball = BallState (Point2 0 1) (Vector2 1 0)
-  , hit  = (0, -1)
-  , p1   = undefined
-  , p2   = undefined
-  , m1   = undefined
-  , m2   = undefined
+  { time  = 0
+  , frame = 0
+  , score = (0, 0)
+  , ball  = BallState (Point2 0 1) (Vector2 1 0)
+  , hit   = (0, Bat Opponent)
+  , p1    = undefined
+  , p2    = undefined
+  , m1    = undefined
+  , m2    = undefined
   }
 
 -- | Create an identity transformation.
@@ -83,6 +117,12 @@ reflectionV :: Transformation 2 Float
 reflectionV = Transformation . Matrix $ Vector3 (Vector3 1   0  0)
                                                 (Vector3 0 (-1) 0)
                                                 (Vector3 0   0  1)
+
+reflectionH :: Transformation 2 Float
+reflectionH = Transformation . Matrix $ Vector3 (Vector3 (-1) 0  0)
+                                                (Vector3   0  1  0)
+                                                (Vector3   0  0  1)
+
 
 transformation :: Element -> Transformation 2 Float
 transformation (Link _ d) = translation $ Vector2 0 d

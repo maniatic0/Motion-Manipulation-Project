@@ -33,18 +33,32 @@ maxSpeed = 2
 
 -- updating
 
+act :: Bool -> State -> IO Motion
+act True  st = action (p1 st) (time st) (hit st) (ball st) (arm $ p1 st)
+act False st = act True (flipState st)
+-- fmap flipMotion $
+-- don't flip resulting motion -> motion is always in local perspective
+
 update :: Float -> State -> IO State
 update deltaTime st = do
-  let op1 = p1 st
-      op2 = p2 st
-      ob  = ball st
-  om1 <- action op1 ob (arm op1)
-  om2 <- action op2 ob (arm op2)
+--  let op1 = p1 st
+--      op2 = p2 st
+--      ob  = ball st
+  om1 <- act True  st -- action op1 ob (arm op1)
+  om2 <- act False st -- action op2 ob (arm op2)
   let initialTime  = time st
       goalTime     = initialTime + deltaTime
       initialState = st {m1 = om1, m2 = om2}
-      finalState   = updateUntil goalTime initialState
-  return finalState
+      finalState   = updateUntil goalTime initialState {frame = frame st + 1}
+  perturbedState <- perturb finalState
+  return perturbedState
+
+perturb :: State -> IO State
+perturb st = do
+  dx <- randomRIO (-amount, amount)
+  dy <- randomRIO (-amount, amount)
+  return $ st {ball = (ball st) {dir = dir (ball st) ^+^ Vector2 dx dy}}
+    where amount = 0.005
 
 -- | Update state using fixed motion until the goal time.
 --   Will recurse until the next collision event is later than the goal time.
@@ -57,17 +71,27 @@ updateUntil deadline st0 | deadline == time st0 = st0
       b0  = loc $ ball st0
       b1  = loc $ ball st1
       collide (i, s0, s1) = collide' i (t0, b0, s0) (t1, b1, s1)
-      repeated (t, i, _) = i /= -1 && (fst $ hit st0) >= t0 && i == (snd $ hit st0)
-      candidates = sort $ filter (not . repeated) $ map collide $ zip3 [0..] (segmentsAt st0) (segmentsAt st1)
-      (t, i, v) = head $ candidates ++ [(t1, -1, dir $ ball st1)]
+      repeated (t, i, _) = i /= Air && (fst $ hit st0) >= t0 && i == (snd $ hit st0)
+      candidates = sort $ filter (not . repeated) $ map collide $ zip3 items (segmentsAt st0) (segmentsAt st1)
+      (t, i, v) = head $ candidates ++ [(t1, Air, dir $ ball st1)]
   in -- traceShow (t, v) $  
      updateUntil deadline $ updateUntilRaw t st0 { ball = (ball st0) {dir = v}
                                                  , hit  = newHit (hit st0) (t, i)
                                                  }
 
-newHit :: (Float, Int) -> (Float, Int) -> (Float, Int)
-newHit o (_, -1) = o
-newHit _ n       = n
+items :: [Item]
+items = map item $ [0..]
+
+item :: Int -> Item
+item 0 = Bat Self
+item 1 = Bat Opponent
+item 2 = Table Self
+item 3 = Table Opponent
+item x = Other x
+
+newHit :: (Float, Item) -> (Float, Item) -> (Float, Item)
+newHit o (_, Air) = o
+newHit _ n        = n
 
 -- | Updates state without checking for collisions.
 updateUntilRaw :: Float -> State -> State
@@ -77,8 +101,8 @@ updateUntilRaw deadline st | deadline == time st = st
       op1 = p1 st
       op2 = p2 st
       ob  = ball st
-      np1 = op1 {arm = performMotion f (m1 st) $ arm op1}
-      np2 = op2 {arm = performMotion f (m2 st) $ arm op2}
+      np1 = op1 {arm = performMotion f (m1 st) op1}
+      np2 = op2 {arm = performMotion f (m2 st) op2}
       nb  = simpleBallStep f ob
   in st { time = deadline
         , p1   = np1
@@ -104,13 +128,47 @@ playerTransform :: (IsTransformable g, NumType g ~ Float, Dimension g ~ 2) => Fl
 playerTransform d True = translateBy $ Vector2 d 0
 playerTransform d False = scaleBy (Vector2 (-1) 1) . translateBy (Vector2 d 0)
 
-performMotion :: Float -> Motion -> Arm -> Arm 
-performMotion f m a = performMotionRaw f (map cap m) a
-  where
-    cap :: Float -> Float
-    cap x | x < -maxSpeed = -maxSpeed
-          | x >  maxSpeed =  maxSpeed
-          | otherwise     =  x
+performMotion :: Float -> Motion -> Player -> Arm 
+performMotion f m p | all (== 0) m = arm p
+                    | otherwise =
+  let na = performMotionRaw f (map cap m) $ arm p
+  in if or [ intersectsExact s t
+           | s <- filter (not . degenerate) $ armSegments p {arm = na} True
+           , t <- listEdges table ++ listEdges room
+           ]
+     then performMotion f (strip0 m) p
+     else na
+
+strip0 :: [Float] -> [Float]
+strip0 [] = []
+strip0 (x : xs) | x /= 0 = 0 : xs
+                | x == 0 = x : strip0 xs
+
+cap :: Float -> Float
+cap x | x < -maxSpeed = -maxSpeed
+      | x >  maxSpeed =  maxSpeed
+      | otherwise     =  x
+
+
+intersectsExact :: LineSegment 2 () Float -> LineSegment 2 () Float -> Bool
+--intersectsExact s t | converf s `intersects` converf t = traceShow (s, t) $ True
+--                    | otherwise                        = False
+intersectsExact s t = converf s `intersects` converf t
+
+converf :: LineSegment 2 () Float -> LineSegment 2 () Rational
+converf = endPoints . core . traverse %~ realToFrac
+
+
+degenerate :: Eq r => LineSegment 2 () r -> Bool
+degenerate s = s ^. start . core == s ^. end . core
+
+
+{-  
+  let rs, rt :: LineSegment 2 () Rational
+      rs = s & endPoints %~ (traverse %~ realToFrac)
+      rt = t & endPoints %~ (traverse %~ realToFrac)
+  in intersects rs rt
+-}
 
 -- needs to check:
 -- * for too fast motion
@@ -151,14 +209,14 @@ down = Vector2 0 (-1)
 
 
 
-collide' :: Int
+collide' :: Item
          -> (Float, Point 2 Float, LineSegment 2 () Float) 
          -> (Float, Point 2 Float, LineSegment 2 () Float) 
-         -> (Float, Int, Vector 2 Float)
+         -> (Float, Item, Vector 2 Float)
 
 collide' i (t0, b0, s0) (t1, b1, s1) = 
   case collisionPoints (t0, b0, s0) (t1, b1, s1)
-  of []            -> (t1, -1, (b1 .-. b0) ^/ (t1 - t0))
+  of []            -> (t1, Air, (b1 .-. b0) ^/ (t1 - t0))
      (p, s, t) : _ -> (t, i, collisionVelocity (t0, b0, s0) (t1, b1, s1) (p, s, t))
 
 -- | For a given collision point and time, compute the velocity of the ball

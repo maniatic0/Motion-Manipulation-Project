@@ -19,11 +19,14 @@ drawState m = G.Pictures
 drawInfo :: State -> Picture
 drawInfo s = G.Pictures
   [ G.Translate (-580) (320) $ G.Scale 0.1 0.1 $ G.text $ (name $ p1 $ s) ++ " VS " ++ (name $ p2 $ s)
-  , G.Translate (-580) (300) $ G.Scale 0.1 0.1 $ G.text $ "time: " ++ (show $ (fromInteger $ floor $ 100 * time s) / 100)
-  , G.Translate (-580) (280) $ G.Scale 0.1 0.1 $ G.text $ "last hit: " ++ (show $ snd $ hit s)
+  , G.Translate (-580) (300) $ G.Scale 0.1 0.1 $ G.text $ "score: " ++ (show $ fst $ score s) ++ " - " ++ (show $ snd $ score s)
+  , G.Translate (-580) (280) $ G.Scale 0.1 0.1 $ G.text $ "time: " ++ (dec $ time s)
+  , G.Translate (-580) (260) $ G.Scale 0.1 0.1 $ G.text $ "FPS: " ++ (dec $ (fromInteger $ toInteger $ frame s) / time s)
+  , G.Translate (-580) (240) $ G.Scale 0.1 0.1 $ G.text $ "last hit: " ++ (show $ snd $ hit s)
   ]
 
-
+dec :: Float -> String
+dec x = show $ (fromInteger $ floor $ 100 * x) / 100
 
 center :: Picture -> Picture
 center = G.Scale 200 200 . G.Translate 0 (-1)

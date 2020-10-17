@@ -37,11 +37,10 @@ wavyArm = [ Link (gradient 0.3) 0.2
 wavyFoot :: Float
 wavyFoot = 1.5
 
-wavyAction :: BallState -> Arm -> IO Motion
-wavyAction bs _ = return $ let t = view xCoord $ loc bs
-                  in [ -2 * sin (2.2 * t)
-                     , -2 * cos (2.3 * t)
-                     ,  2 * sin (2.4 * t)
-                     ,  2 * cos (2.5 * t)
-                     ]
+wavyAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+wavyAction t _ _ _ = return [ -2 * sin (2.2 * t)
+                            , -2 * cos (2.3 * t)
+                            ,  2 * sin (2.4 * t)
+                            ,  2 * cos (2.5 * t)
+                            ]
 

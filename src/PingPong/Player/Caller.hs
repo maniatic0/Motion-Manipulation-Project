@@ -38,17 +38,11 @@ callFoot = 1.4
 
 
 
-callAction :: BallState -> Arm -> IO Motion
-callAction bs arm = do
-  let state = writeState bs arm
+callAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+callAction time hit bs arm = do
+  let state = writeState time hit bs arm
   writeFile "in" state
   callCommand externalCommand
   out <- readFile "out"
   let motion = readMotion out
   return motion
-
-
-noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> (Float, Point 2 Float, LineSegment 2 () Float) 
-          -> Point 2 Float
-noCollide (t1, p1, s1) (t2, p2, s2) = p2

@@ -22,13 +22,15 @@ frameRate :: Float
 frameRate = 50
 
 frameCount :: Int
-frameCount = round  $ 3 * 60 * frameRate -- 3 minutes (3 * 60)
+frameCount = 10 -- 00
 
 frameDuration :: Float
 frameDuration = 1 / frameRate
 
 play :: Player -> Player -> IO ()
 play ip1 ip2 = do
+  prepare ip1
+  prepare ip2
   b <- startBall
   let initialState = defState {p1 = ip1, p2 = ip2, ball = b}
   putStrLn $ "[" ++ name ip1 ++ " versus " ++ name ip2 ++ "]"

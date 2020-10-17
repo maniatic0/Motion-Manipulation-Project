@@ -11,6 +11,7 @@ mrStiff = defaultPlayer
   { name = "Mr Stiff"
   , arm = stiffArm
   , foot = stiffFoot
+  , action = stiffAction
   }
 
 paleBlue :: Color
@@ -29,4 +30,9 @@ stiffArm = [ Link paleBlue 0.4
 
 stiffFoot :: Float
 stiffFoot = 1.3
+
+stiffAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+stiffAction t _ _ _ = return [ 2 * sin (0.27 * t)
+                             , 2 * sin (1.03 * t)
+                             ]
 

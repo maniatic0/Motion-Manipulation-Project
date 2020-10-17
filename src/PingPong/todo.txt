@@ -24,3 +24,10 @@ to do for implementation
 
 
 - remove almost-equal test?
+
+
+
+
+test2: treshold 0.01, accept empty lists for unreachable positions
+don't make cases exactly at the treshold
+only alternating links/joints

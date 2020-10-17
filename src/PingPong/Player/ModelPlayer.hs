@@ -19,8 +19,8 @@ modelPlayer = defaultPlayer
 
 modelCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
              -> (Float, Point 2 Float, LineSegment 2 () Float) 
-             -> Point 2 Float
-modelCollide (t0, b0, s0) (t1, b1, s1) = 
+             -> IO (Point 2 Float)
+modelCollide (t0, b0, s0) (t1, b1, s1) = return $ 
   case collisionPoints (t0, b0, s0) (t1, b1, s1)
   of []            -> b1
      (p, s, t) : _ -> p .+^ (t1 - t) *^ collisionVelocity (t0, b0, s0) (t1, b1, s1) (p, s, t)

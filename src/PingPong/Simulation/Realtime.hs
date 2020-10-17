@@ -17,6 +17,8 @@ windowDisplay = InWindow "Window" (1600, 800) (100, 100)
 
 play :: Player -> Player -> IO ()
 play ip1 ip2 = do
+  prepare ip1
+  prepare ip2
   b <- startBall
   let initialState = defState {p1 = ip1, p2 = ip2, ball = b}
   simulateIO windowDisplay

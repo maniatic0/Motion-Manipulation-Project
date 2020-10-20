@@ -328,7 +328,9 @@ hotPink = makeColor 1.0 0.2 0.7 1
 stigArm :: Arm
 stigArm =
   checkArm
-    [ Joint red (-0.3), -- (0.1)
+    [ 
+      Link paleBlue 0.5,
+      Joint red (-0.3), -- (0.1)
       Link paleBlue 0.5,
       Joint red 1.3, -- (0.1)
       Link paleBlue 0.4,
@@ -340,7 +342,7 @@ stigArm =
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.3
+stigFoot = 1.2
 
 -- | Stig rest postion
 stigRest :: Motion

@@ -119,29 +119,29 @@ stigCollide t1 t2 = bool (error "Stig Collide Failed a Test Case") (return (f t1
 --test = stigCollide (0, Point2 (-1) 1, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 1 1 :+ ())) (1, Point2 0 0, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 (-1) 1 :+ ()))
 
 stigAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
-stigAction _ (_, Other _) _ arm =
+stigAction _ (tColl, Other _) _ arm =
   return $
     -- Ball hit something out of the game, this means someone scored
     -- Go to rest
     let toRest = armToStigRestMotion arm
-     in trace "Someone Scored" applyMotionLimits toRest -- Velocity limits
-stigAction _ (_, Bat Self) _ arm =
+     in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
+stigAction _ (tColl, Bat Self) _ arm =
   return $
     -- We hit the ball, go to rest motion
     let toRest = armToStigRestMotion arm
-     in trace "We just hit the ball" applyMotionLimits toRest -- Velocity limits
+     in trace ("We just hit the ball at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
 stigAction _ (tColl, Table Opponent) _ arm =
   return $
     -- Our hit was correct and we reached the other player's side
     -- So rest
     let toRest = armToStigRestMotion arm
-     in trace ("We did a proper hit at" ++ show tColl) applyMotionLimits toRest -- Velocity limits
+     in trace ("We did a proper hit at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
 stigAction t (tColl, Air) bs arm =
   return $
     -- Initial state, ball is falling towards some player
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
-        motion = bool (trace "The game've just begun and the other have to hit first" stigNoMotion) (trace "The game've just begun and we have to hit first" toRest) (xdir > 0) -- xDir > 0 -> towards us
+        motion = bool (trace ("The game've just begun and the other have to hit first at " ++ show tColl) stigNoMotion) (trace ("The game've just begun and we have to hit first at " ++ show tColl) toRest) (xdir > 0) -- xDir > 0 -> towards us
      in applyMotionLimits motion -- Velocity limits
 stigAction t (tColl, Table Self) bs arm =
   return $
@@ -149,14 +149,14 @@ stigAction t (tColl, Table Self) bs arm =
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
         motion = bool [1, -1, 1, -1] toRest (xdir > 0)
-     in trace "Opponent did a proper hit" applyMotionLimits motion -- Velocity limits
+     in trace ("Opponent did a proper hit at " ++ show tColl) applyMotionLimits motion -- Velocity limits
 stigAction t (tColl, Bat Opponent) bs arm =
   return $
     -- Other player hit the ball and we have to see if it was a proper hit
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
         motion = bool [1, -1, 1, -1] toRest (xdir > 0)
-     in trace "Opponent did a hit" applyMotionLimits motion -- Velocity limits
+     in trace ("Opponent did a hit at " ++ show tColl) applyMotionLimits motion -- Velocity limits
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

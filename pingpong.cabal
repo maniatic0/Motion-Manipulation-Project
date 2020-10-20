@@ -40,6 +40,9 @@ library
     PingPong.Player.MsWavy
     PingPong.Player.ModelPlayer
     PingPong.Player.Stig
+    PingPong.Player.Stig.General
+    PingPong.Player.Stig.GeometryHelpers
+    PingPong.Player.Stig.Kinematics
     PingPong.Simulation  
     PingPong.Simulation.Recording
     PingPong.Simulation.Realtime

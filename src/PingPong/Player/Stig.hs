@@ -145,12 +145,14 @@ stigAction t (tColl, Air) bs arm =
      in applyMotionLimits motion -- Velocity limits
 stigAction t (tColl, Table Self) bs arm = trace "Opponent did a proper hit"
   return $
+    -- Other player did a proper hit we have to respond to 
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
         motion = bool [1, -1, 1, -1] toRest (xdir > 0)
      in applyMotionLimits motion -- Velocity limits
 stigAction t (tColl, Bat Opponent) bs arm = trace "Opponent did a hit"
   return $
+    -- Other player hit the ball and we have to see if it was a proper hit
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
         motion = bool [1, -1, 1, -1] toRest (xdir > 0)

@@ -130,12 +130,12 @@ stigAction _ (_, Bat Self) _ arm =
     -- We hit the ball, go to rest motion
     let toRest = armToStigRestMotion arm
      in trace "We just hit the ball" applyMotionLimits toRest -- Velocity limits
-stigAction _ (_, Table Opponent) _ arm =
+stigAction _ (tColl, Table Opponent) _ arm =
   return $
     -- Our hit was correct and we reached the other player's side
     -- So rest
     let toRest = armToStigRestMotion arm
-     in trace "We did a proper hit" applyMotionLimits toRest -- Velocity limits
+     in trace ("We did a proper hit at" ++ show tColl) applyMotionLimits toRest -- Velocity limits
 stigAction t (tColl, Air) bs arm =
   return $
     -- Initial state, ball is falling towards some player

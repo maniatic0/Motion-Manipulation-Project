@@ -39,6 +39,7 @@ library
     PingPong.Player.MrStiff
     PingPong.Player.MsWavy
     PingPong.Player.ModelPlayer
+    PingPong.Player.Stig
     PingPong.Simulation  
     PingPong.Simulation.Recording
     PingPong.Simulation.Realtime

@@ -119,14 +119,37 @@ stigCollide t1 t2 = bool (error "Stig Collide Failed a Test Case") (return (f t1
 --test = stigCollide (0, Point2 (-1) 1, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 1 1 :+ ())) (1, Point2 0 0, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 (-1) 1 :+ ()))
 
 stigAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+stigAction _ (_, Other _) _ arm = trace "Someone Scored"
+  return $
+    -- Ball hit something out of the game, this means someone scored
+    -- Go to rest
+    let toRest = armToStigRestMotion arm
+     in applyMotionLimits toRest -- Velocity limits
+stigAction _ (_, Bat Self) _ arm = trace "We just hit the ball"
+  return $
+    -- We hit the ball, go to rest motion
+    let toRest = armToStigRestMotion arm
+     in applyMotionLimits toRest -- Velocity limits
+stigAction _ (_, Table Opponent) _ arm = trace "We did a proper hit"
+  return $
+    -- Our hit was correct and we reached the other player's side
+    -- So rest
+    let toRest = armToStigRestMotion arm
+     in applyMotionLimits toRest -- Velocity limits
 stigAction t (tColl, Air) bs arm =
   return $
     -- Initial state, ball is falling towards some player
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm
-        motion = bool stigNoMotion toRest (xdir > 0) -- xDir > 0 -> towards us
+        motion = bool (trace "The game've just begun and the other have to hit first" stigNoMotion) (trace "The game've just begun and we have to hit first" toRest) (xdir > 0) -- xDir > 0 -> towards us
      in applyMotionLimits motion -- Velocity limits
-stigAction t (tColl, coll) bs arm =
+stigAction t (tColl, Table Self) bs arm = trace "Opponent did a proper hit"
+  return $
+    let xdir = view xComponent $ dir bs
+        toRest = armToStigRestMotion arm
+        motion = bool [1, -1, 1, -1] toRest (xdir > 0)
+     in applyMotionLimits motion -- Velocity limits
+stigAction t (tColl, Bat Opponent) bs arm = trace "Opponent did a hit"
   return $
     let xdir = view xComponent $ dir bs
         toRest = armToStigRestMotion arm

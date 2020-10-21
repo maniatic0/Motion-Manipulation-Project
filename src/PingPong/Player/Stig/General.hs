@@ -3,7 +3,8 @@ module PingPong.Player.Stig.General where
 
 import Data.Bool (bool)
 import PingPong.Model
-import Graphics.Gloss
+import Graphics.Gloss ( Color, makeColor )
+import System.IO     
 
 -- General Helpers
 
@@ -60,5 +61,18 @@ red = makeColor 1 0 0 1
 
 hotPink :: Color
 hotPink = makeColor 1.0 0.2 0.7 1
+
+-- | Read Arm from string
+readElement :: [String] -> Arm
+readElement [] = []
+readElement (t:val:rest)
+  | t == "link" = Link red (read val :: Float): readElement rest
+  | t == "joint" = Joint red (read val :: Float): readElement rest
+
+-- | Read Foot and Arm from a list of lines as strings
+readArm :: [String] -> [(Float, Arm)]
+readArm [] = []
+readArm (sFoot:sArm:rest) = (read sFoot :: Float, readElement $ words sArm) : readArm rest
+
 
 -- End of General Helpers

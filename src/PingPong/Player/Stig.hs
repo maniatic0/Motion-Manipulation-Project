@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- By Christian Oliveros and Minmin Chen
-module PingPong.Player.Stig (stig) where
+module PingPong.Player.Stig -- (stig) 
+where
 
 import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
@@ -15,6 +16,8 @@ import PingPong.Model
 import PingPong.Player.Stig.General
 import PingPong.Player.Stig.GeometryHelpers
 import PingPong.Player.Stig.Kinematics
+
+import Control.Monad
 
 -- | Stig's player
 stig :: Player
@@ -166,7 +169,7 @@ stigPlanThreshold = threshold 0.01
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> IO Motion
 stigPlanPnt foot arm p
   | stigPlanThreshold 0 eB == 0 = return $ map normalizeAngle $ jointVectorToMotion qB
-  | otherwise = return []
+  | otherwise = trace ("Error: " ++ show eB) return []
   where
     (a, m) = getArmKinematicAndMotion foot arm
     q = motionToJointVector m
@@ -178,7 +181,7 @@ stigPlanSeg foot arm s
   | isOnlyBat = return [] -- No idea if we reach it because we can't move
   | isOnlyBatJoint = return $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
   | normalCheck = return $ map normalizeAngle qF
-  | otherwise = return []
+  | otherwise = trace ("Errors" ++ show (eB, eBat)) return []
   where
     -- Target Info
     startPoint = s ^. (start . core)
@@ -277,41 +280,43 @@ stigPlanSeg foot arm s
 createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
 createPlanPntCase f a (xT, yT) m = (f, a, Point2 xT yT, m)
 
-{- -- | Test stigPlanPnt
+-- | Test stigPlanPnt
 testPlanPnt :: (Float, Arm, Point 2 Float, Motion) -> IO Bool
 testPlanPnt (f, arm, pT, mT)
-  | null mT = null mB
-  | null mB = null mT
-  | otherwise = result && (length mB == length mT)
-  where
-    -- Expected Position
-    qT = motionToJointVector mT
-    xTargetGlobal = pointToHomogenousPoint pT
+  = do
+      -- Expected Position
+      let qT = motionToJointVector mT
+      let xTargetGlobal = pointToHomogenousPoint pT
 
-    -- Arm
-    (a, _) = getArmKinematicAndMotion f arm
+      -- Arm
+      let (a, _) = getArmKinematicAndMotion f arm
 
-    -- Calculate Answer
-    mB = stigPlanPnt f arm pT
-    qB = motionToJointVector mB
+      -- Calculate Answer
+      mB <- stigPlanPnt f arm pT
+      if null mB then
+        return $ bool (trace "Wrong Null" False) (null mT) (null mT)
+      else
+        do
+          let qB = motionToJointVector mB
 
-    -- Forward Transforms
-    fwdTT = applyForwardKinematicTrans a qT
-    fwdTB = applyForwardKinematicTrans a qB
+          -- Forward Transforms
+          let fwdTT = applyForwardKinematicTrans a qT
+          let fwdTB = applyForwardKinematicTrans a qB
 
-    -- Bat Global Position
-    batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
-    batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
+          -- Bat Global Position
+          let batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
+          let batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
 
-    -- Error
-    eB = xTargetGlobal - batGlobalB
-    eNormB = Numerical.norm_2 eB
+          -- Error
+          let eB = xTargetGlobal - batGlobalB
+          let eNormB = Numerical.norm_2 eB
 
-    eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
-    eNormT = Numerical.norm_2 eT
+          let eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+          let eNormT = Numerical.norm_2 eT
 
-    result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
- -}
+          let result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+          return $ result && (length mB == length mT)
+ 
 -- | Test Cases for testPlanPnt
 planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
 planPntTestCases =
@@ -356,57 +361,81 @@ planPntTestCases =
         Link red 0.1
       ]
       (1.48013, 0.89202)
-      [0.1, -0.2, 0.3, -0.4]
+      [0.1, -0.2, 0.3, -0.4],
+      createPlanPntCase
+      1.5
+      [ Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (1.5, 0)
+      [2.094,2.094],
+      createPlanPntCase
+      1.5
+      [ Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (1.5, 0)
+      [2.094,2.094]
   ]
 
-{- -- | Executes testPlanPnt
-executePlanPntTestCases :: Bool
-executePlanPntTestCases = all testPlanPnt planPntTestCases
- -}
+-- | Executes testPlanPnt
+executePlanPntTestCases :: IO Bool
+executePlanPntTestCases = foldM f True planPntTestCases
+  where
+    f True params = testPlanPnt params
+    f False _ = return False
+
 
 -- | Create a Test Case for stigPlanSeg
 createPlanSegCase :: Float -> Arm -> (Float, Float) -> (Float, Float) -> Motion -> (Float, Arm, LineSegment 2 () Float, Motion)
 createPlanSegCase f a (xP0, yP0) (xP1, yP1) m = (f, a, ClosedLineSegment (Point2 xP0 yP0 :+ ()) (Point2 xP1 yP1 :+ ()), m)
 
-{- -- | Test stigPlanSeg
-testPlanSeg :: (Float, Arm, LineSegment 2 () Float, Motion) -> Bool
+-- | Test stigPlanSeg
+testPlanSeg :: (Float, Arm, LineSegment 2 () Float, Motion) -> IO Bool
 testPlanSeg (f, arm, sT, mT)
-  | null mT = null mB
-  | null mB = null mT
-  | otherwise = result && bool (trace "Different Motion Sizes" False) True (length mB == length mT)
-  where
-    -- Expected Position
-    pT = sT ^. (end . core)
-    qT = motionToJointVector mT
-    xTargetGlobal = pointToHomogenousPoint pT
+  = 
+    do
+      -- Expected Position
+      let pT = sT ^. (end . core)
+      let qT = motionToJointVector mT
+      let xTargetGlobal = pointToHomogenousPoint pT
 
-    -- Arm
-    (a, _) = getArmKinematicAndMotion f arm
+      -- Arm
+      let (a, _) = getArmKinematicAndMotion f arm
 
-    -- Calculate Answer
-    mB = stigPlanSeg f arm sT
-    qB = motionToJointVector mB
+      -- Calculate Answer
+      mB <- stigPlanSeg f arm sT
+      if null mB then
+        return $ bool (trace "Wrong Null" False) (null mT) (null mT)
+      else
+        do
+          let qB = motionToJointVector mB
 
-    -- Forward Transforms
-    fwdTT = applyForwardKinematicTrans a qT
-    fwdTB = applyForwardKinematicTrans a qB
+          -- Forward Transforms
+          let fwdTT = applyForwardKinematicTrans a qT
+          let fwdTB = applyForwardKinematicTrans a qB
 
-    -- Bat Global Position
-    batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
-    batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
+          -- Bat Global Position
+          let batGlobalB = applyForwardKinematicMatrixTrans fwdTB Numerical.#> homogeneousZero
+          let batGlobalT = applyForwardKinematicMatrixTrans fwdTT Numerical.#> homogeneousZero
 
-    -- Error
-    eB = xTargetGlobal - batGlobalB
-    eNormB = Numerical.norm_2 eB
+          -- Error
+          let eB = xTargetGlobal - batGlobalB
+          let eNormB = Numerical.norm_2 eB
 
-    eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
-    eNormT = Numerical.norm_2 eT
+          let eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+          let eNormT = Numerical.norm_2 eT
 
-    result =
-      trace ("Target " ++ show (batGlobalT, eNormT)) $
-        (globalThreshold 0 eNormB == 0)
-          && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
- -}
+          let result = trace ("Target " ++ show (batGlobalT, eNormT)) $
+                (globalThreshold 0 eNormB == 0)
+                  && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
+          return $ result && bool (trace "Different Motion Sizes" False) True (length mB == length mT)
 
 -- | Test Cases for testPlanPnt
 planSegTestCases :: [(Float, Arm, LineSegment 2 () Float, Motion)]
@@ -440,11 +469,25 @@ planSegTestCases =
       ]
       (1.71174, 0.75003)
       (1.66379, 0.83779)
-      [-0.5, 0.0, 0.4, 0.6]
+      [-0.5, 0.0, 0.4, 0.6],
+    createPlanSegCase
+      1.5
+      [ Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1,
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (1.4134, 5.0e-2)
+      (1.5, 0)
+      [2.094,2.094]
   ]
 
-{-
+
 -- | Executes testPlanSeg
-executePlanSegTestCases :: Bool
-executePlanSegTestCases = all testPlanSeg planSegTestCases
- -}
+executePlanSegTestCases :: IO Bool
+executePlanSegTestCases = foldM f True planSegTestCases
+  where
+    f True params = testPlanSeg params
+    f False _ = return False
+ 

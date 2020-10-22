@@ -31,6 +31,10 @@ simulationTableHeigth = 0.5
 simulationTableDir :: Vector 2 Float
 simulationTableDir = Vector2 1 0
 
+-- | Bat's Length
+simulationBatLength :: Float
+simulationBatLength = 0.1
+
 -- | Predict the time (relative to current time) the gravity parabole is going to intersect a height
 predictFreefallHeightInter :: Point 2 Float -> Vector 2 Float -> Float -> Maybe Float 
 predictFreefallHeightInter p v tH = bool res Nothing (null tsRaw) 
@@ -64,7 +68,18 @@ reflectVelocityTable v = reflect v simulationTableDir
 
 -- | Get the normal of the free fall velocity
 freefallNormal :: Vector 2 Float -> Vector 2 Float
-freefallNormal v = Vector2 (-view yComponent v) (view xComponent v)
+freefallNormal v = n
+  where
+    nUnorm = Vector2 (-view yComponent v) (view xComponent v)
+    (n, _) = normalizeVector nUnorm
+
+-- | Get the (relative) time of maximum height of a freefall. Note, it might be negative, meaning it already peaked
+freeFallMaxHeightTime :: Vector 2 Float -> Float
+freeFallMaxHeightTime v = view yComponent v / simulationGravity
+
+-- | Calculates the (relative) time to reach a x position in a freefall. Note, it might be negative, meaning it already passed
+freeFallTimeToXPos :: Point 2 Float -> Vector 2 Float -> Float -> Float
+freeFallTimeToXPos p v x = (x - view xCoord p) / view xComponent v
 
 -- | Predict the info of the ball bouncing on the table
 predictTableBounce :: Point 2 Float -> Vector 2 Float -> Maybe (Point 2 Float, Vector 2 Float, Float)
@@ -78,6 +93,26 @@ predictTableBounce p v = res
     -- | Reflects the velocity againts the table, like a collision
     reflectCollVec :: Float -> (Point 2 Float, Vector 2 Float) -> (Point 2 Float, Vector 2 Float, Float)
     reflectCollVec t0 (p0, v0) = (p0, reflectVelocityTable v0, t0)
+
+
+-- | Place the bat normal to a ball point and velocity
+placeBatinBounceCurve :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
+placeBatinBounceCurve p v = line
+  where
+    
+    -- Normal to Velocity
+    n = freefallNormal v
+    p0 = p .+^ (n ^* (simulationBatLength / 2))
+    p1 = p .+^ (n ^* (simulationBatLength / 2))
+    p0Dist = distToSpecialBase p0
+    p1Dist = distToSpecialBase p1
+    
+    line = bool (ClosedLineSegment (p1 :+ ()) (p0 :+ ())) (ClosedLineSegment (p0 :+ ()) (p1 :+ ()))  (p0Dist < p1Dist)
+
+    -- | Distance to Stig base at table height
+    distToSpecialBase :: Point 2 Float -> Float
+    distToSpecialBase po = norm $ po .-. Point2 stigFoot simulationTableHeigth
+
 
 -- | Stig's player
 stig :: Player
@@ -108,6 +143,10 @@ stigArm =
       Link hotPink 0.1 -- Bat
     ]
 
+-- | Stig Arm Length
+stigArmLength :: Float
+stigArmLength = armLength stigArm
+
 -- | Separation from the center of the table
 stigFoot :: Float
 stigFoot = 1.2
@@ -122,12 +161,9 @@ stigNoMotion = map f stigRest
   where
     f = const 0
 
--- | Calculate Motion to Rest Position. !Warning: no limits are applied
+-- | Calculate Motion Velocity to Rest Motion. !Warning: no limits are applied
 armToStigRestMotion :: Arm -> Motion
-armToStigRestMotion ar = zipWith f stigRest $ getCurrentJoints ar
-  where
-    g = globalThreshold 0.0
-    f = deltaAngle . g
+armToStigRestMotion ar = armToMotion ar stigRest 
 
 -- | Check collision of moving line and point
 stigCollide ::
@@ -202,24 +238,53 @@ stigAction _ (tColl, Table Opponent) _ arm =
 stigAction t (tColl, Air) bs arm =
   return $
     -- Initial state, ball is falling towards some player
-    let xdir = view xComponent $ dir bs
-        toRest = armToStigRestMotion arm
-        motion = bool (trace ("The game've just begun and the other have to hit first at " ++ show tColl) stigNoMotion) (trace ("The game've just begun and we have to hit first at " ++ show tColl) toRest) (xdir > 0) -- xDir > 0 -> towards us
-     in applyMotionLimits motion -- Velocity limits
+    let toRest = armToStigRestMotion arm
+     in trace ("Impossible State " ++ show tColl) applyMotionLimits toRest -- Velocity limits
 stigAction t (tColl, Table Self) bs arm =
-  return $
-    -- Other player did a proper hit we have to respond to 
-    let xdir = view xComponent $ dir bs
-        toRest = armToStigRestMotion arm
-        motion = bool [1, -1, 1, -1] toRest (xdir > 0)
-     in trace ("Opponent did a proper hit at " ++ show tColl) applyMotionLimits motion -- Velocity limits
+    do 
+      -- Other player did a proper hit we have to respond to 
+      -- Distance to max point for now
+      let p = loc bs
+      let v = dir bs
+      let tM = freeFallMaxHeightTime v
+      let (pM, vM) = freeFallEvaluateTime p v tM
+      let bat = placeBatinBounceCurve pM vM
+
+      -- this is just in the case we can reach it
+      let toRest = armToStigRestMotion arm
+
+      mIntercept <- stigPlanSeg stigFoot arm bat
+
+      case mIntercept of
+        [] -> return $ trace ("Opponent did a proper hit we can't catch at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
+        _ -> do
+          let mV = armToMotion arm mIntercept
+          return $ trace ("Opponent did a proper hit we can catch at " ++ show tColl) applyMotionLimits mV -- Velocity limits
 stigAction t (tColl, Bat Opponent) bs arm =
-  return $
-    -- Other player hit the ball and we have to see if it was a proper hit
-    let xdir = view xComponent $ dir bs
-        toRest = armToStigRestMotion arm
-        motion = bool [1, -1, 1, -1] toRest (xdir > 0)
-     in trace ("Opponent did a hit at " ++ show tColl) applyMotionLimits motion -- Velocity limits
+  do 
+      -- this is just in the case we can reach it
+      let toRest = armToStigRestMotion arm
+
+      -- Other player did a hit we have to respond to 
+      let p = loc bs
+      let v = dir bs
+
+      let mayBounce = predictTableBounce p v
+
+      case mayBounce of
+        Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
+        Just (pT, vT, _) -> do
+          let tM = freeFallMaxHeightTime vT
+          let (pM, vM) = freeFallEvaluateTime pT vT tM
+          let bat = placeBatinBounceCurve pM vM
+
+          mIntercept <- stigPlanSeg stigFoot arm bat
+
+          case mIntercept of
+            [] -> return $ trace ("Opponent did a hit we can't catch at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
+            _ -> do
+              let mV = armToMotion arm mIntercept
+              return $ trace ("Opponent did a hit we can catch at " ++ show tColl) applyMotionLimits mV -- Velocity limits
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

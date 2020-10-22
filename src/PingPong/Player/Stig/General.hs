@@ -4,7 +4,7 @@ module PingPong.Player.Stig.General where
 import Data.Bool (bool)
 import PingPong.Model
 import Graphics.Gloss ( Color, makeColor )
-import System.IO     
+import PingPong.Player.Stig.GeometryHelpers
 
 -- General Helpers
 
@@ -74,5 +74,17 @@ readArm :: [String] -> [(Float, Arm)]
 readArm [] = []
 readArm (sFoot:sArm:rest) = (read sFoot :: Float, readElement $ words sArm) : readArm rest
 
+-- | Calculates an arm length
+armLength :: Arm -> Float
+armLength [] = 0
+armLength (Link _ t : rest) = t + armLength rest
+armLength (_:rest) = armLength rest
+
+-- | Calculate Motion Velocity to a Motion. !Warning: no limits are applied
+armToMotion :: Arm -> Motion -> Motion
+armToMotion ar m = zipWith f m $ getCurrentJoints ar
+  where
+    g = globalThreshold 0.0
+    f = deltaAngle . g
 
 -- End of General Helpers

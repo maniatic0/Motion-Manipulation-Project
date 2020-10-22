@@ -19,6 +19,66 @@ import PingPong.Player.Stig.Kinematics
 
 import Control.Monad
 
+-- | Simulation's gravity
+simulationGravity :: Float
+simulationGravity = 2
+
+-- | Simulation's Table Height
+simulationTableHeigth :: Float
+simulationTableHeigth = 0.5
+
+-- | Normalized direction of the table
+simulationTableDir :: Vector 2 Float
+simulationTableDir = Vector2 1 0
+
+-- | Predict the time (relative to current time) the gravity parabole is going to intersect a height
+predictFreefallHeightInter :: Point 2 Float -> Vector 2 Float -> Float -> Maybe Float 
+predictFreefallHeightInter p v tH = bool res Nothing (null tsRaw) 
+  where
+    a2 = -simulationGravity / 2
+    a1 = view yComponent v
+    a0 = view yCoord p - tH
+    possible = solveQuadratic a2 a1 a0
+    tsRaw = fromJust possible
+    -- If solveQuadratic is [] change for 0, because all t are valid
+    -- Also, make sure the times are valid between 0 and 1 (threshold is used for approximations)
+    ts = filter (0 <=) $ map (globalThreshold 0) $ bool tsRaw [0] (null tsRaw)
+    res = case ts of
+      [] -> Nothing -- No solution
+      _ -> Just $ minimum ts -- Minimum Valid Time
+
+-- | Evaluate the free fall formulas for a time
+freeFallEvaluateTime :: Point 2 Float -> Vector 2 Float -> Float -> (Point 2 Float, Vector 2 Float)
+freeFallEvaluateTime p v t = (Point2 x y, Vector2 vx vy)
+  where
+    vx = view xComponent v
+    x = vx * t + view xCoord p
+
+    vy0 = view yComponent v
+    vy = -simulationGravity * t + vy0
+    y = -simulationGravity * t * t / 2 + vy0 * t + view yCoord p
+
+-- | Reflect a velocity vector againts the table like in a collision
+reflectVelocityTable :: Vector 2 Float -> Vector 2 Float
+reflectVelocityTable v = reflect v simulationTableDir
+
+-- | Get the normal of the free fall velocity
+freefallNormal :: Vector 2 Float -> Vector 2 Float
+freefallNormal v = Vector2 (-view yComponent v) (view xComponent v)
+
+-- | Predict the info of the ball bouncing on the table
+predictTableBounce :: Point 2 Float -> Vector 2 Float -> Maybe (Point 2 Float, Vector 2 Float, Float)
+predictTableBounce p v = res
+  where 
+    tPossible = predictFreefallHeightInter p v simulationTableHeigth
+    res = case tPossible of
+            Nothing -> Nothing
+            Just t -> Just $ reflectCollVec t $ freeFallEvaluateTime p v t
+
+    -- | Reflects the velocity againts the table, like a collision
+    reflectCollVec :: Float -> (Point 2 Float, Vector 2 Float) -> (Point 2 Float, Vector 2 Float, Float)
+    reflectCollVec t0 (p0, v0) = (p0, reflectVelocityTable v0, t0)
+
 -- | Stig's player
 stig :: Player
 stig =
@@ -276,6 +336,8 @@ stigPlanSeg foot arm s
     angleVector :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
     angleVector v1 v2 = atan2 (cross2D v1 v2) (Numerical.dot v1 v2)
 
+
+-- Testing Starts Here
 -- | Create a Test Case for stigPlanPnt
 createPlanPntCase :: Float -> Arm -> (Float, Float) -> Motion -> (Float, Arm, Point 2 Float, Motion)
 createPlanPntCase f a (xT, yT) m = (f, a, Point2 xT yT, m)

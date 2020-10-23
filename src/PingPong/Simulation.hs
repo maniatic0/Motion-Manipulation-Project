@@ -3,10 +3,11 @@ module PingPong.Simulation where
 import PingPong.Model
 import PingPong.Draw
 
-import Data.Geometry hiding (init, head, zero)
+import Data.Geometry hiding (init, head, zero, replicate)
 import Data.Geometry.Matrix
 import Data.Geometry.Transformation
 
+import Data.Fixed
 import Data.Ext
 import Data.List hiding (intersect)
 import Data.Foldable
@@ -20,45 +21,145 @@ import Debug.Trace
 
 import System.Random
 
-startBall :: IO BallState
-startBall = do
+startBall :: Bool -> IO BallState
+startBall p = do
   h <- randomRIO (0.9, 1)
   x <- randomRIO (1.3, 1.4)
   y <- randomRIO (-0.1, 0)
-  return $ BallState (Point2 0 h) (Vector2 x y)
+  return $ BallState (Point2 0 h) (Vector2 (if p then x else -x) y)
 
 -- | Maximum speed in radians per second of joint rotation.
 maxSpeed :: Float
 maxSpeed = 2
 
+-- Duration of non-rally game phases in seconds
+beforeGameTime  = 4
+beforeRallyTime = 4
+afterRallyTime  = 2
+afterGameTime   = 10
+
 -- updating
 
+getPlayer :: Bool -> State -> Player
+getPlayer True  = p1
+getPlayer False = p2
+
 act :: Bool -> State -> IO Motion
-act True  st = action (p1 st) (time st) (hit st) (ball st) (arm $ p1 st)
-act False st = act True (flipState st)
+act b st = case phase st of BeforeGame _  -> stretch (getPlayer b st) (time st) $ arm $ getPlayer b st
+                            BeforeRally _ -> straightenUp b st
+                            DuringRally   -> actDuringRally b st
+                            AfterGame _   -> dance (getPlayer b st) (time st) $ arm $ getPlayer b st
+                            _             -> return $ replicate 5 0
+
+straightenUp :: Bool -> State -> IO Motion
+straightenUp True  st = return $ straighten (p1 st)
+straightenUp False st = return $ straighten (p2 st)
+
+straighten :: Player -> Motion
+straighten p = 
+  let vals = map modAngle $ map (\(Joint _ v) -> v) $ filter isJoint $ arm p 
+      gals = map modAngle $ map (\(Joint _ v) -> v) $ filter isJoint $ initArm p 
+  in zipWith (\v g -> modAngle $ g - v) vals gals
+
+modAngle :: Float -> Float
+modAngle x = (x + pi) `mod'` (2 * pi) - pi
+
+actDuringRally :: Bool -> State -> IO Motion
+actDuringRally True  st = action (p1 st) (time st) (head $ hits st) (ball st) (arm $ p1 st)
+actDuringRally False st = act True (flipState st)
 -- fmap flipMotion $
 -- don't flip resulting motion -> motion is always in local perspective
 
 update :: Float -> State -> IO State
 update deltaTime st = do
---  let op1 = p1 st
---      op2 = p2 st
---      ob  = ball st
-  om1 <- act True  st -- action op1 ob (arm op1)
-  om2 <- act False st -- action op2 ob (arm op2)
+  om1 <- act True  st
+  om2 <- act False st
   let initialTime  = time st
       goalTime     = initialTime + deltaTime
       initialState = st {m1 = om1, m2 = om2}
-      finalState   = updateUntil goalTime initialState {frame = frame st + 1}
-  perturbedState <- perturb finalState
-  return perturbedState
+      finalState   = case phase st of
+                       BeforeRally _ -> updateUntilGhost goalTime initialState {frame = frame st + 1}
+                       _ -> updateUntil goalTime initialState {frame = frame st + 1}
+  perturbedState <- perturb deltaTime finalState
+  updatePhase deltaTime perturbedState
 
-perturb :: State -> IO State
-perturb st = do
+-- update the phase: count down timer, and if reached 0, take approriate action
+-- if phase is DuringRally, then check the last thing that was hit.
+  -- need to know history???
+updatePhase :: Float -> State -> IO State
+updatePhase delta st = f $ phase st
+  where 
+    f (BeforeGame t)  | t > delta = return $ st {phase = BeforeGame  $ t - delta}
+                      | otherwise = initBeforeRally st 
+    f (BeforeRally t) | t > delta = return $ st {phase = BeforeRally $ t - delta}
+                      | otherwise = initDuringRally st
+    f (AfterRally t)  | t > delta = return $ st {phase = AfterRally  $ t - delta}
+                      | otherwise = initBeforeRally st
+    f (AfterGame t)   | t > delta = return $ st {phase = AfterGame   $ t - delta}
+                      | otherwise = return $ st -- the game is over, simulation should stop
+    f DuringRally     | testScore (map snd $ hits st) (view xCoord $ loc $ ball st) == Nothing = return $ st
+                      | otherwise = updateScore (unJust $ testScore (map snd $ hits st) (view xCoord $ loc $ ball st)) (score st) st
+
+initBeforeGame :: State -> IO State
+initBeforeGame st = return $ st { phase = BeforeGame beforeGameTime
+                                , score = (0, 0)
+                                , ball  = BallState (Point2 (-1) 0.6) (Vector2 0.4 1)
+                                , p1    = (p1 st) {initArm = arm (p1 st)}
+                                , p2    = (p2 st) {initArm = arm (p2 st)}
+                                }
+
+initBeforeRally :: State -> IO State
+initBeforeRally st = do
+  b <- startBall True
+  return $ st { phase = BeforeRally beforeRallyTime
+              , ball  = b {dir = Vector2 0 0}
+              }
+
+initDuringRally :: State -> IO State
+initDuringRally st = do
+  let (i, j) = score st
+      p      = (i + j) `mod` 4 < 2
+  b <- startBall p
+  return $ st { phase = DuringRally
+              , hits  = [(0, Bat $ if p then Opponent else Self)] 
+              , ball  = (ball st) {dir = dir b}
+              }
+
+initAfterRally :: State -> IO State
+initAfterRally st = return $ st {phase = AfterRally afterRallyTime}
+
+initAfterGame :: State -> IO State
+initAfterGame st = return $ st {phase = AfterGame  afterGameTime}
+
+unJust (Just x) = x
+
+testScore :: [Item] -> Float -> Maybe Bool
+testScore [] _ = Nothing
+testScore [_] _ = Nothing
+testScore (Table Self : Bat Opponent : _) _ = Nothing
+testScore (Table Opponent : Bat Self : _) _ = Nothing
+testScore (Bat Self : Table Self : _) _ = Nothing
+testScore (Bat Opponent : Table Opponent : _) _ = Nothing
+testScore (_ : Bat Opponent : _) x | x > 0 && x < 1 = Just False
+                                   | otherwise      = Just True
+testScore (_ : Bat Self : _) x | x > -1 && x < 0 = Just True
+                               | otherwise       = Just False
+testScore (_ : Table Opponent : _) _ = Just True
+testScore (_ : Table Self : _) _ = Just False
+testScore _ _ = Nothing
+
+updateScore :: Bool -> (Int, Int) -> State -> IO State
+updateScore True  (a, b) st | a >= 10 && b <  a  = initAfterGame $ st {score = (a + 1, b)}
+updateScore False (a, b) st | a <  b  && b >= 10 = initAfterGame $ st {score = (a, b + 1)}
+updateScore True  (a, b) st = initAfterRally $ st {score = (a + 1, b)}
+updateScore False (a, b) st = initAfterRally $ st {score = (a, b + 1)}
+
+perturb :: Float -> State -> IO State
+perturb deltaTime st = do
   dx <- randomRIO (-amount, amount)
   dy <- randomRIO (-amount, amount)
   return $ st {ball = (ball st) {dir = dir (ball st) ^+^ Vector2 dx dy}}
-    where amount = 0.005
+    where amount = 0.025 * deltaTime
 
 -- | Update state using fixed motion until the goal time.
 --   Will recurse until the next collision event is later than the goal time.
@@ -71,12 +172,12 @@ updateUntil deadline st0 | deadline == time st0 = st0
       b0  = loc $ ball st0
       b1  = loc $ ball st1
       collide (i, s0, s1) = collide' i (t0, b0, s0) (t1, b1, s1)
-      repeated (t, i, _) = i /= Air && (fst $ hit st0) >= t0 && i == (snd $ hit st0)
+      repeated (t, i, _) = i /= Air && (fst $ head $ hits st0) >= t0 && i == (snd $ head $ hits st0)
       candidates = sort $ filter (not . repeated) $ map collide $ zip3 items (segmentsAt st0) (segmentsAt st1)
       (t, i, v) = head $ candidates ++ [(t1, Air, dir $ ball st1)]
   in -- traceShow (t, v) $  
      updateUntil deadline $ updateUntilRaw t st0 { ball = (ball st0) {dir = v}
-                                                 , hit  = newHit (hit st0) (t, i)
+                                                 , hits = newHits (hits st0) (t, i)
                                                  }
 
 items :: [Item]
@@ -89,9 +190,9 @@ item 2 = Table Self
 item 3 = Table Opponent
 item x = Other x
 
-newHit :: (Float, Item) -> (Float, Item) -> (Float, Item)
-newHit o (_, Air) = o
-newHit _ n        = n
+newHits :: [(Float, Item)] -> (Float, Item) -> [(Float, Item)]
+newHits os (_, Air) = os
+newHits os n        = n : os
 
 -- | Updates state without checking for collisions.
 updateUntilRaw :: Float -> State -> State
@@ -109,6 +210,24 @@ updateUntilRaw deadline st | deadline == time st = st
         , p2   = np2
         , ball = nb
         }
+
+-- | Updates state without checking for collisions.
+updateUntilGhost :: Float -> State -> State
+updateUntilGhost deadline st | deadline == time st = st
+                           | otherwise =
+  let f   = deadline - time st
+      op1 = p1 st
+      op2 = p2 st
+      ob  = ball st
+      np1 = op1 {arm = performMotionRaw f (m1 st) (arm op1)}
+      np2 = op2 {arm = performMotionRaw f (m2 st) (arm op2)}
+      nb  = ob
+  in st { time = deadline
+        , p1   = np1
+        , p2   = np2
+        , ball = nb
+        }
+
 
 segmentsAt :: State -> [LineSegment 2 () Float]
 segmentsAt st =  (last . toList . edgeSegments) (playerGeom True  $ p1 st)

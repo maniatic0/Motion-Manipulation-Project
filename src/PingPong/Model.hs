@@ -16,6 +16,10 @@ data Element = Link Color Float
              | Joint Color Float
   deriving (Show, Eq)
 
+isJoint :: Element -> Bool
+isJoint (Joint _ _) = True
+isJoint _           = False
+
 type Arm = [Element]
 
 data BallState = BallState
@@ -28,12 +32,16 @@ data Player = Player
   , arm     :: Arm
   , foot    :: Float
   , prepare :: IO ()
+  , terminate :: IO () -- call this at the end (make sure interactive simulator reacts to closing)
   , action  :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+  , stretch :: Float -> Arm -> IO Motion
+  , dance   :: Float -> Arm -> IO Motion
   , collide :: (Float, Point 2 Float, LineSegment 2 () Float) 
             -> (Float, Point 2 Float, LineSegment 2 () Float) 
             -> IO (Point 2 Float)
   , planPnt :: Float -> Arm -> Point 2 Float -> IO [Float]
   , planSeg :: Float -> Arm -> LineSegment 2 () Float -> IO [Float]
+  , initArm :: Arm
   }
 
 
@@ -44,12 +52,20 @@ data Item = Air | Bat Owner | Table Owner | Other Int deriving (Show, Eq, Ord)
 
 data Owner = Self | Opponent deriving (Show, Eq, Ord)
 
+data Phase = BeforeGame Float
+           | BeforeRally Float -- make players attempt to revert to 0
+           | DuringRally
+           | AfterRally Float
+           | AfterGame Float
+  deriving Show
+
 data State = State
-  { time   :: Float -- time elapsed since the start of the game
+  { phase  :: Phase -- current phase of the game
+  , time   :: Float -- time elapsed since the start of the game
   , frame  :: Int   -- number of frames since the start of the game
   , score  :: (Int, Int)
   , ball   :: BallState
-  , hit    :: (Float, Item) -- time and index of last collision
+  , hits   :: [(Float, Item)] -- list of times and indices of past collisions
   , p1, p2 :: Player
   , m1, m2 :: Motion -- current motion (until next frame)
   }
@@ -57,7 +73,7 @@ data State = State
 -- | Change state from the perspective of p1 to the perspective of p2.
 flipState :: State -> State
 flipState st = st { ball = flipBall $ ball st
-                  , hit = (fst $ hit st, flipItem $ snd $ hit st)
+                  , hits = map flipHit $ hits st
                   , p1 = p2 st
                   , p2 = p1 st
                   , m1 = flipMotion $ m2 st
@@ -72,6 +88,9 @@ flipBall st = st { loc = transformBy reflectionH $ loc st
 flipMotion :: Motion -> Motion
 flipMotion = map negate
 
+flipHit :: (Float, Item) -> (Float, Item)
+flipHit (f, i) = (f, flipItem i)
+
 flipItem :: Item -> Item
 flipItem (Bat   o) = Bat   $ flipOwner o
 flipItem (Table o) = Table $ flipOwner o
@@ -83,11 +102,12 @@ flipOwner Opponent = Self
 
 defState :: State
 defState = State
-  { time  = 0
+  { phase = BeforeGame 2
+  , time  = 0
   , frame = 0
   , score = (0, 0)
   , ball  = BallState (Point2 0 1) (Vector2 1 0)
-  , hit   = (0, Bat Opponent)
+  , hits  = [(0, Bat Opponent)]
   , p1    = undefined
   , p2    = undefined
   , m1    = undefined

@@ -127,14 +127,19 @@ placeBatInBounceCurve p v = line
 stig :: Player
 stig =
   Player
-    { name = "Stig",
+    { 
+      name = "Stig",
       arm = stigArm,
+      initArm = stigArm,
       foot = stigFoot,
       prepare = return (),
+      terminate = return (),
       action = stigAction,
       collide = stigCollide,
       planPnt = stigPlanPnt,
-      planSeg = stigPlanSeg
+      planSeg = stigPlanSeg,
+      stretch = \_ _ -> return stigNoMotion,
+      dance   = \_ _ -> return stigNoMotion
     }
 
 -- | Arm to use

@@ -42,21 +42,34 @@ defaultPlayer :: Player
 defaultPlayer = Player
   { name    = "DefaultPlayer"
   , arm     = [ Link black 1, Joint black 0, Link black 0.1 ]
+  , initArm = [ Link black 1, Joint black 0, Link black 0.1 ]
   , foot    = 1.5
   , prepare = return ()
+  , terminate = return ()
   , action  = const $ const $ const $ const $ return [0]
   , collide = const $ const $ return $ Point2 0 0
   , planPnt = const $ const $ const $ return [0]
   , planSeg = const $ const $ const $ return [0]
+  , stretch = defaultStretch
+  , dance   = defaultDance
   } 
 
 
-
-
-noAction :: BallState -> Arm -> IO Motion
-noAction _ _ = return [0, 0]
 
 noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 
           -> (Float, Point 2 Float, LineSegment 2 () Float) 
           -> IO (Point 2 Float)
 noCollide (t1, p1, s1) (t2, p2, s2) = return p2
+
+-- | Default stretching behaviour.
+defaultStretch :: Float -> Arm -> IO Motion
+defaultStretch t _ = return $ map (* cos t) [-3, 6, -6, 6, -6]
+
+-- | Default dancing behaviour.
+defaultDance :: Float -> Arm -> IO Motion
+defaultDance t _ = return [ 5 * sin (2.5 * (t + 0.0))
+                          , 5 * sin (2.5 * (t + 0.3))
+                          , 5 * sin (2.5 * (t + 0.6))
+                          , 5 * sin (2.5 * (t + 0.9))
+                          , 5 * sin (2.5 * (t + 1.2))
+                          ]

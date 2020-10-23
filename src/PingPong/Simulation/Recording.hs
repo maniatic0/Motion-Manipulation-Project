@@ -25,7 +25,7 @@ totalTime :: Float
 totalTime = 30
 
 frameCount :: Int
-frameCount = ceiling $ totalTime * frameRate -- 00
+frameCount = ceiling $ totalTime * frameRate
 
 frameDuration :: Float
 frameDuration = 1 / frameRate
@@ -34,13 +34,14 @@ play :: Player -> Player -> IO ()
 play ip1 ip2 = do
   prepare ip1
   prepare ip2
-  b <- startBall
-  let initialState = defState {p1 = ip1, p2 = ip2, ball = b}
+  initialState <- initBeforeGame $ defState {p1 = ip1, p2 = ip2}
   putStrLn $ "[" ++ name ip1 ++ " versus " ++ name ip2 ++ "]"
   Right font <- loadFontFile "Montserrat-Bold.ttf"
   pics <- record frameCount font initialState
   export pics (filter isAlphaNum (name ip1) ++ "-" ++ filter isAlphaNum (name ip2))
-    
+  terminate ip1
+  terminate ip2
+
 
 record :: Int -> Font -> State -> IO [Drawing PixelRGBA8 ()]
 record 0 _    _  = return []

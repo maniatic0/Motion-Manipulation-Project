@@ -6,7 +6,7 @@ import PingPong.Draw
 import Graphics.Gloss (Picture, Color)
 import qualified Graphics.Gloss as G
 
-import Data.Geometry
+import Data.Geometry hiding (head)
 
 import Convert
 
@@ -14,16 +14,29 @@ drawState :: State -> Picture
 drawState m = G.Pictures 
   [ center $ G.Pictures [drawStatic, drawPlayer (p1 m) True, drawPlayer (p2 m) False, drawBall $ ball m]
   , drawInfo m
+  , drawPhase (phase m) m
   ]
 
 drawInfo :: State -> Picture
 drawInfo s = G.Pictures
-  [ G.Translate (-580) (320) $ G.Scale 0.1 0.1 $ G.text $ (name $ p1 $ s) ++ " VS " ++ (name $ p2 $ s)
-  , G.Translate (-580) (300) $ G.Scale 0.1 0.1 $ G.text $ "score: " ++ (show $ fst $ score s) ++ " - " ++ (show $ snd $ score s)
+  [ G.Translate (-580) (320) $ G.Scale 0.1 0.1 $ G.text $ (name $ p2 $ s) ++ " VS " ++ (name $ p1 $ s)
+  , G.Translate (-580) (300) $ G.Scale 0.1 0.1 $ G.text $ "score: " ++ (show $ snd $ score s) ++ " - " ++ (show $ fst $ score s)
   , G.Translate (-580) (280) $ G.Scale 0.1 0.1 $ G.text $ "time: " ++ (dec $ time s)
   , G.Translate (-580) (260) $ G.Scale 0.1 0.1 $ G.text $ "FPS: " ++ (dec $ (fromInteger $ toInteger $ frame s) / time s)
-  , G.Translate (-580) (240) $ G.Scale 0.1 0.1 $ G.text $ "last hit: " ++ (show $ snd $ hit s)
+  , G.Translate (-580) (240) $ G.Scale 0.1 0.1 $ G.text $ "last hit: " ++ (show $ snd $ head $ hits s)
+  , G.Translate (-580) (220) $ G.Scale 0.1 0.1 $ G.text $ "phase: " ++ (show $ phase s)
   ]
+
+drawPhase :: Phase -> State -> Picture
+drawPhase DuringRally s = G.Blank
+drawPhase (BeforeGame _) s = G.Translate (-580) (100) $ G.Scale 1 1 $ G.text $ (name $ p2 $ s) ++ " VS " ++ (name $ p1 $ s)
+drawPhase (BeforeRally _) s = G.Translate (-580) (100) $ G.Scale 1 1 $ G.text $ "prepare for action"
+drawPhase (AfterRally _) s = G.Translate (-280) (100) $ G.Scale 1 1 $ G.text $ (show $ snd $ score s) ++ " - " ++ (show $ fst $ score s)
+drawPhase (AfterGame _) s = G.Translate (-580) (100) $ G.Scale 1 1 $ G.text $ (name $ winner $ s) ++ " wins!"
+
+winner :: State -> Player
+winner s | fst (score s) > snd (score s) = p1 s
+         | otherwise = p2 s
 
 dec :: Float -> String
 dec x = show $ (fromInteger $ floor $ 100 * x) / 100

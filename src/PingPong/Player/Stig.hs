@@ -37,7 +37,7 @@ simulationTableMaxX = 1
 
 -- | Normalized direction of the table
 simulationTableDir :: Vector 2 Float
-simulationTableDir = Vector2 1 0
+simulationTableDir = Vector2 (-1) 0
 
 -- | Bat's Length
 simulationBatLength :: Float
@@ -92,7 +92,7 @@ freeFallMaxHeightTime v = view yComponent v / simulationGravity
 freeFallTimeToXPos :: Point 2 Float -> Vector 2 Float -> Float -> Float
 freeFallTimeToXPos p v x = (x - view xCoord p) / view xComponent v
 
--- | Predict the info of the ball bouncing on the table
+-- | Predict the info of the ball bouncing on our side of the table
 predictTableBounce :: Point 2 Float -> Vector 2 Float -> Maybe (Point 2 Float, Vector 2 Float, Float)
 predictTableBounce p v = res
   where 
@@ -105,7 +105,7 @@ predictTableBounce p v = res
             Just t -> if xPosValid then return (pB, reflectVelocityTable vB, t) else Nothing
 
 
--- | Checks if a position is valid
+-- | Checks if a position is valid for our side of the table
 checkValidPos :: Point 2 Float -> Bool
 checkValidPos p0 = simulationTableCenterX <= xPos && xPos <= simulationTableMaxX && simulationTableHeight <= yPos
   where
@@ -134,7 +134,8 @@ placeBatInBounceCurve p v = line
   where
     
     -- Normal to Velocity
-    n = freefallNormal v
+    -- n = freefallNormal v
+    (n, _) = normalizeVector v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
     p1 = p .-^ (n ^* (simulationBatLength / 2))
     p0Dist = distToSpecialBase p0

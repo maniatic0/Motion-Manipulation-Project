@@ -21,8 +21,11 @@ import Data.Char
 frameRate :: Float
 frameRate = 50
 
+totalTime :: Float
+totalTime = 30
+
 frameCount :: Int
-frameCount = 10 -- 00
+frameCount = ceiling $ totalTime * frameRate -- 00
 
 frameDuration :: Float
 frameDuration = 1 / frameRate

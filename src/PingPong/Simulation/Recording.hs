@@ -22,7 +22,7 @@ frameRate :: Float
 frameRate = 50
 
 totalTime :: Float
-totalTime = 30
+totalTime = 15
 
 frameCount :: Int
 frameCount = ceiling $ totalTime * frameRate

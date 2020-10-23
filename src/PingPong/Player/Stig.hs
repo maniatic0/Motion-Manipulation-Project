@@ -24,8 +24,8 @@ simulationGravity :: Float
 simulationGravity = 2
 
 -- | Simulation's Table Height
-simulationTableHeigth :: Float
-simulationTableHeigth = 0.5
+simulationTableHeight :: Float
+simulationTableHeight = 0.5
 
 -- | Simulation's Table Center X Position
 simulationTableCenterX :: Float
@@ -96,13 +96,37 @@ freeFallTimeToXPos p v x = (x - view xCoord p) / view xComponent v
 predictTableBounce :: Point 2 Float -> Vector 2 Float -> Maybe (Point 2 Float, Vector 2 Float, Float)
 predictTableBounce p v = res
   where 
-    tPossible = predictFreefallHeightInter p v simulationTableHeigth
+    tPossible = predictFreefallHeightInter p v simulationTableHeight
     (pB, vB) = freeFallEvaluateTime p v (fromJust tPossible)
     xPos = view xCoord pB
     xPosValid =  simulationTableCenterX <= xPos && xPos <= simulationTableMaxX
     res = case tPossible of
             Nothing -> Nothing
             Just t -> if xPosValid then return (pB, reflectVelocityTable vB, t) else Nothing
+
+
+-- | Checks if a position is valid
+checkValidPos :: Point 2 Float -> Bool
+checkValidPos p0 = simulationTableCenterX <= xPos && xPos <= simulationTableMaxX && simulationTableHeight <= yPos
+  where
+    xPos = view xCoord p0
+    yPos = view yCoord p0
+
+-- | Try to predict the best interception time
+predictBestInterceptionTime :: Point 2 Float -> Vector 2 Float -> Maybe Float
+predictBestInterceptionTime p v = res
+  where
+    ts = [freeFallMaxHeightTime v, freeFallTimeToXPos p v simulationTableMaxX, freeFallTimeToXPos p v (simulationTableMaxX / 2), freeFallTimeToXPos p v (simulationTableMaxX / 4)]
+    tF = filter tFilter ts
+
+    res =  if null tF then Nothing else Just $ minimum tF
+
+    tFilter :: Float -> Bool
+    tFilter t = 0 <= t && checkValidPos p0
+      where
+        (p0, _) = freeFallEvaluateTime p v t
+
+
 
 -- | Place the bat normal to a ball point and velocity
 placeBatInBounceCurve :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
@@ -112,7 +136,7 @@ placeBatInBounceCurve p v = line
     -- Normal to Velocity
     n = freefallNormal v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
-    p1 = p .+^ (n ^* (simulationBatLength / 2))
+    p1 = p .-^ (n ^* (simulationBatLength / 2))
     p0Dist = distToSpecialBase p0
     p1Dist = distToSpecialBase p1
     
@@ -120,8 +144,32 @@ placeBatInBounceCurve p v = line
 
     -- | Distance to Stig base at table height
     distToSpecialBase :: Point 2 Float -> Float
-    distToSpecialBase po = norm $ po .-. Point2 stigFoot simulationTableHeigth
+    distToSpecialBase po = norm $ po .-. Point2 stigFoot simulationTableHeight
 
+
+-- | Try to intercept Ball
+tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
+tryInterceptBall arm p v tColl =
+   do 
+      -- Other player did a proper hit we have to respond to 
+      let tPossible = predictBestInterceptionTime p v
+
+      let toRest = armToStigRestMotion arm
+
+      case tPossible of
+        Nothing -> return $ trace ("Opponent did a proper hit we can't intercept at " ++ show tColl) applyMotionLimits toRest
+        Just tP -> do
+          let (pM, vM) = freeFallEvaluateTime p v tP
+          let bat = placeBatInBounceCurve pM vM
+
+          -- this is just in the case we can reach it
+          mIntercept <- stigPlanSeg stigFoot arm bat
+
+          case mIntercept of
+            [] -> return $ trace ("Opponent did a proper hit we can't catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits toRest -- Velocity limits
+            _ -> do
+              let mV = armToMotion arm mIntercept
+              return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits
 
 -- | Stig's player
 stig :: Player
@@ -163,7 +211,7 @@ stigArmLength = armLength stigArm
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.2
+stigFoot = 1.5
 
 -- | Stig rest postion
 stigRest :: Motion
@@ -260,21 +308,7 @@ stigAction t (tColl, Table Self) bs arm =
       -- Distance to max point for now
       let p = loc bs
       let v = dir bs
-      let tM = freeFallMaxHeightTime v
-      let (pM, vM) = freeFallEvaluateTime p v tM
-      let bat = placeBatInBounceCurve pM vM
-
-      -- this is just in the case we can reach it
-      let toRest = armToStigRestMotion arm
-
-      mIntercept <- stigPlanSeg stigFoot arm bat
-
-      case mIntercept of
-        [] -> return $ trace ("Opponent did a proper hit we can't catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits toRest -- Velocity limits
-        _ -> do
-          let mV = armToMotion arm mIntercept
-          return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits
---stigAction t (tColl, Bat Opponent) bs arm =
+      tryInterceptBall arm p v tColl
 stigAction t (tColl, Bat Opponent) bs arm =
   do 
       -- this is just in the case we can reach it
@@ -288,18 +322,7 @@ stigAction t (tColl, Bat Opponent) bs arm =
 
       case mayBounce of
         Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) applyMotionLimits (armToMotion arm stigNoMotion) -- Velocity limits
-        Just (pT, vT, _) -> do
-          let tM = freeFallMaxHeightTime vT
-          let (pM, vM) = freeFallEvaluateTime pT vT tM
-          let bat = placeBatInBounceCurve pM vM
-
-          mIntercept <- stigPlanSeg stigFoot arm bat
-
-          case mIntercept of
-            [] -> return $ trace ("Opponent did a hit we think we can't catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits toRest -- Velocity limits
-            _ -> do
-              let mV = armToMotion arm mIntercept
-              return $ trace ("Opponent did a hit we think we can catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits
+        Just (pT, vT, _) -> tryInterceptBall arm pT vT tColl
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

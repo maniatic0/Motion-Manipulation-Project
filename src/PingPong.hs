@@ -16,4 +16,4 @@ players :: [Player]
 players = [mrStiff, msWavy, stig]
 
 main :: IO ()
-main = play stig msWavy
+main = play stig stig

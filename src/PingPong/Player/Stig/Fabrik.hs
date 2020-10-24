@@ -20,7 +20,7 @@ reach :: (Num r, Floating r, Ord r, Show r) => r -> Point 2 r -> Point 2 r -> Po
 reach l _ p0 target = (target, tailP)
     where
         (nlDir, nNorm) = normalizeVectorThreshold fabrikThreshold $ p0 .-. target
-        tailP = target .+^ bool (Vector2 l 0) (nlDir ^* l) (nNorm > 0)
+        tailP = target .+^ bool (Vector2 l 0) (nlDir ^* l) (nNorm > 0) -- the bool is in the case p0 is at target
 
 -- | FABRIK internal iteration
 fabrikIter :: (Num r, Floating r, Ord r, Show r) => [r] -> [Point 2 r] -> Point 2 r -> [Point 2 r]

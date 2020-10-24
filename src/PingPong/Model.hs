@@ -114,6 +114,11 @@ defState = State
   , m2    = undefined
   }
 
+winner :: State -> Player
+winner s | fst (score s) > snd (score s) = p1 s
+         | otherwise = p2 s
+
+
 -- | Create an identity transformation.
 identity :: Transformation 2 Float
 identity = Transformation . Matrix $ Vector3 (Vector3 1 0 0)

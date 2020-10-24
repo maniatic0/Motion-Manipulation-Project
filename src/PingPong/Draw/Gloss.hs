@@ -34,10 +34,6 @@ drawPhase (BeforeRally _) s = G.Translate (-580) (100) $ G.Scale 1 1 $ G.text $ 
 drawPhase (AfterRally _) s = G.Translate (-280) (100) $ G.Scale 1 1 $ G.text $ (show $ snd $ score s) ++ " - " ++ (show $ fst $ score s)
 drawPhase (AfterGame _) s = G.Translate (-580) (100) $ G.Scale 1 1 $ G.text $ (name $ winner $ s) ++ " wins!"
 
-winner :: State -> Player
-winner s | fst (score s) > snd (score s) = p1 s
-         | otherwise = p2 s
-
 dec :: Float -> String
 dec x = show $ (fromInteger $ floor $ 100 * x) / 100
 

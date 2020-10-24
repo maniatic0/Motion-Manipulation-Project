@@ -45,6 +45,8 @@ drawState font m = do drawStatic
                       drawPlayer (p2 m) False
                       drawBall $ ball m
                       drawInfo font (name $ p1 m) (name $ p2 m)
+                      drawScore font (fst $ score m) (snd $ score m)
+                      drawPhase font (phase m) m
 --                 withColor (convertColor cRoom) $ R.fill $ R.rectangle (R.V2 100 100) 200 100
 
 --center :: IsTransformable a => a -> a
@@ -61,13 +63,28 @@ drawStatic = do drawRoom
                 drawTable
                 drawNet
 
-drawInfo :: Font -> String -> String -> Picture
-drawInfo font n1 n2 = do 
-  withColor (convertColor cTable) $ R.printTextAt font (R.PointSize 36) (R.V2 300 100) n2
-  withColor (convertColor cTable) $ R.printTextAt font (R.PointSize 48) (R.V2 900 100) "VS"
-  withColor (convertColor cTable) $ R.printTextAt font (R.PointSize 36) (R.V2 1300 100) n1
-  return ()
+drawPhase :: Font -> Phase -> State -> Picture
+drawPhase font DuringRally s = return ()
+drawPhase font (BeforeGame _) s = drawText font (convertColor cTable) 64 500 300 $ (name $ p2 $ s) ++ " VS " ++ (name $ p1 $ s)
+drawPhase font (BeforeRally _) s = drawText font (convertColor cTable) 64 500 300 $ "prepare for action"
+drawPhase font (AfterRally _) s = drawText font (convertColor cTable) 64 800 300 $ (show $ snd $ score s) ++ " - " ++ (show $ fst $ score s)
+drawPhase font (AfterGame _) s = drawText font (convertColor cTable) 64 500 300 $ (name $ winner $ s) ++ " wins!"
 
+
+drawInfo :: Font -> String -> String -> Picture
+drawInfo font n1 n2 = do
+  drawText font (convertColor cTable) 36 300 100 n2
+  drawText font (convertColor cTable) 48 900 100 "VS"
+  drawText font (convertColor cTable) 36 1300 100 n1
+
+
+drawScore :: Font -> Int -> Int -> Picture
+drawScore font n1 n2 = do 
+  drawText font (convertColor cTable) 64 400 200 $ show n2
+  drawText font (convertColor cTable) 64 1400 200 $ show n1
+
+drawText :: Font -> Color -> Float -> Float -> Float -> String -> Picture
+drawText font color size x y text = withColor color $ R.printTextAt font (R.PointSize size) (R.V2 x y) text
 
 drawRoom :: Picture
 drawRoom = withColor (convertColor cRoom)

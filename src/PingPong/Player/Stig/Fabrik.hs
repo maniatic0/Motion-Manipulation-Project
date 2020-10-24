@@ -38,7 +38,7 @@ fabrikStep arm tgt = (newArm, err)
 
 -- | Fabrik Threshold, arm must be from end effector to base
 fabrikThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
-fabrikThreshold = threshold 0.001
+fabrikThreshold = threshold 0.00000001
 
 fabrikMaxIter :: Int
 fabrikMaxIter = 1000
@@ -47,7 +47,7 @@ fabrikMaxIter = 1000
 fabrikAlgo :: (Num r, Floating r, Ord r, Show r) => Int -> [Point 2 r] -> Point 2 r -> ([Point 2 r], r)
 fabrikAlgo iter arm tgt
     | (iter + 1) >= fabrikMaxIter = trace ("Max Iter " ++ show err) (newArm, err)
-    |  fabrikThreshold 0 err == 0 = trace ("Reached " ++ show err)(newArm, err)
+    |  fabrikThreshold 0 err == 0 = trace ("Reached " ++ show err ++ " " ++ show iter)(newArm, err)
     | otherwise = fabrikAlgo (iter + 1) newArm tgt
     where
         (newArm, err) = fabrikStep arm tgt
@@ -102,7 +102,7 @@ fabrikSpaceToMotion arm = fabrikSpaceToMotionInternal (Vector2 0 1) armInv
         fabrikSpaceToMotionInternal v (p0:p1:rest) = double2Float angle : fabrikSpaceToMotionInternal nV (p1:rest)
             where
                 nV = p1 .-. p0
-                angle = angleVectorPrecise3 v nV 
+                angle = angleVectorPrecise3 v nV
 
 -- | Fabrik to Point
 fabrikToPoint :: Float -> Arm -> Point 2 Float -> (Motion, Double)

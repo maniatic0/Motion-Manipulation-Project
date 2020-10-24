@@ -16,6 +16,7 @@ import PingPong.Model
 import PingPong.Player.Stig.General
 import PingPong.Player.Stig.GeometryHelpers
 import PingPong.Player.Stig.Kinematics
+import PingPong.Player.Stig.Fabrik
 
 import Control.Monad
 
@@ -134,7 +135,7 @@ placeBatInBounceCurve p v = line
   where
     
     -- Normal to Velocity
-    -- n = freefallNormal v
+    --n = freefallNormal v
     (n, _) = normalizeVector v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
     p1 = p .-^ (n ^* (simulationBatLength / 2))
@@ -333,13 +334,14 @@ stigPlanThreshold = threshold 0.1
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> IO Motion
 stigPlanPnt foot arm p
   | isTooFar = trace "Too Far" return []
-  | stigPlanThreshold 0 eB == 0 = return $ map normalizeAngle $ jointVectorToMotion qB
+  | stigPlanThreshold 0 eB == 0 = return $ map normalizeAngle qB -- \$ jointVectorToMotion qB
   | otherwise = trace ("Error: " ++ show eB) return []
   where
     isTooFar = norm (p .-. Point2 foot 0) > 1.2 * armLength arm
-    (a, m) = getArmKinematicAndMotion foot arm
+    {- (a, m) = getArmKinematicAndMotion foot arm
     q = motionToJointVector m
-    (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q
+    (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q -}
+    (qB, eB) = fabrikToPoint foot arm p
 
 -- | Calculates the possible motion values to achieve a line segment. If it fails it returns []
 stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> IO Motion

@@ -11,6 +11,10 @@ import Data.Ext
 import Debug.Trace
 import GHC.Float
 
+-- | Get Link Length
+getLinkLength :: Element -> Double
+getLinkLength (Link _ l) = float2Double l
+
 -- | Fabrik Threshold, arm must be from end effector to base
 fabrikThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
 fabrikThreshold = threshold 0.000000001
@@ -46,8 +50,8 @@ fabrikMaxIter = 1000
 -- | Apply the FABRIK algorithm, arm must be from end effector to base
 fabrikAlgo :: (Num r, Floating r, Ord r, Show r) => Int -> [r] -> [Point 2 r] -> Point 2 r -> ([Point 2 r], r)
 fabrikAlgo iter links arm tgt
-    | (iter + 1) >= fabrikMaxIter = trace ("Max Iter " ++ show err) (newArm, err)
-    |  fabrikThreshold 0 err == 0 = trace ("Reached " ++ show err ++ " " ++ show iter) (newArm, err)
+    | (iter + 1) >= fabrikMaxIter = (newArm, err)
+    |  fabrikThreshold 0 err == 0 = (newArm, err)
     | otherwise = fabrikAlgo (iter + 1) links newArm tgt
     where
         (newArm, err) = fabrikStep links arm tgt
@@ -55,6 +59,22 @@ fabrikAlgo iter links arm tgt
 -- | Apply the FABRIK algorithm, arm must be from end effector to base
 fabrikApply :: (Num r, Floating r, Ord r, Show r) => [r] -> [Point 2 r] -> Point 2 r -> ([Point 2 r], r) 
 fabrikApply = fabrikAlgo 0
+
+-- Center at the base of the arm which we put at (0,0), move space there
+pointToFabrikSpace :: Float -> Arm -> Point 2 Float -> Point 2 Double
+pointToFabrikSpace foot arm tgt = newTgt
+    where
+        -- Simplify redundant links
+        simpleArm = simplifyArm arm
+
+        -- We have to see if we start with a link or a joint
+        armHead = head simpleArm
+        startsLink = not $ isJoint armHead
+
+        -- if we start 
+        -- We are centered at the base of the arm which we put at (0,0), move space there
+        tgtDouble = Point2 (float2Double $ view xCoord tgt) (float2Double $ view yCoord tgt)
+        newTgt = tgtDouble .-^ Vector2 (float2Double foot) (bool 0 (getLinkLength armHead) startsLink)
 
 -- | Convert fromn foot arm space to the fabrik space. Note that arm mut go from base to end effector
 toFabrikSpace :: Float -> Arm -> Point 2 Float -> ([Point 2 Double], [Double], Point 2 Double)
@@ -69,11 +89,10 @@ toFabrikSpace foot arm tgt = (newArm, links, newTgt)
 
         -- if we start 
         -- We are centered at the base of the arm which we put at (0,0), move space there
-        tgtDouble = Point2 (float2Double $ view xCoord tgt) (float2Double $ view yCoord tgt)
-        newTgt = tgtDouble .-^ Vector2 (float2Double foot) (bool 0 (getLinkLength armHead) startsLink)
+        newTgt = pointToFabrikSpace foot arm tgt
 
         -- We centered space at (0,0), which is the base of the robot (if it uses first link, then we moved that as well)
-        base = Point2 0 0 --(float2Double foot)  (bool 0 (getLinkLength armHead) startsLink)
+        base = Point2 0 0
 
         -- Create Fabrik arm, it goes from end effector to base
         armToUse = if startsLink then tail simpleArm else simpleArm
@@ -81,10 +100,6 @@ toFabrikSpace foot arm tgt = (newArm, links, newTgt)
 
         -- We want link lengths
         links = reverse $ map getLinkLength $ filter (not.isJoint) armToUse
-
-        -- | Get Link Length
-        getLinkLength :: Element -> Double
-        getLinkLength (Link _ l) = float2Double l
 
         -- | Creates the points for Fabrik (goes from base to end effector)
         armToFabrik :: Point 2 Double -> Arm -> [Point 2 Double]
@@ -96,6 +111,7 @@ toFabrikSpace foot arm tgt = (newArm, links, newTgt)
 
 -- | Converts an arm from fabrik space to motion space
 fabrikSpaceToMotion :: [Point 2 Double] -> Motion
+fabrikSpaceToMotion [] = []
 fabrikSpaceToMotion arm = fabrikSpaceToMotionInternal (Vector2 0 1) armInv
     where
         armInv = reverse arm
@@ -113,5 +129,46 @@ fabrikToPoint :: Float -> Arm -> Point 2 Float -> (Motion, Double)
 fabrikToPoint foot arm tgt = (m, err)
     where
         (newArm, links, newTgt) = toFabrikSpace foot arm tgt
-        (tgtArm, err) = traceShow (newArm, links, newTgt) fabrikApply links newArm newTgt
+        (tgtArm, err) = fabrikApply links newArm newTgt
         m = fabrikSpaceToMotion tgtArm
+
+-- | Fabrik to Segment
+fabrikToSegment :: Float -> Arm -> LineSegment 2 () Float -> (Motion, Double, Double)
+fabrikToSegment foot arm lTgt
+    | isOnlyBat = (mOnlyBat, eBOnlyBat, errOnlyBat)
+    | otherwise = (m, errBatless, errBat)
+    where
+        -- Target Info
+        startPoint = lTgt ^. (start . core)
+        endPoint = lTgt ^. (end . core)
+        
+        simplerArmInv = reverse $ simplifyArm arm
+        bat = head simplerArmInv
+        batlessArm = reverse $ tail $ tail simplerArmInv -- We were promised no dual joints
+
+        -- Check if the bat is only an arm
+        isOnlyBat = null batlessArm
+
+        -- | Only bat
+        eBOnlyBat = norm $ pointFloat2Double startPoint .-. Point2 (float2Double foot) 0
+        (newArmOnlyBat, linksOnlyBat, newTgtOnlyBat) = toFabrikSpace foot arm endPoint
+        (tgtArmOnlyBat, errOnlyBat) = fabrikApply linksOnlyBat newArmOnlyBat newTgtOnlyBat
+        mOnlyBat = fabrikSpaceToMotion tgtArmOnlyBat
+
+        -- | Batless arm
+        (newArmBatless, linksBatless, newTgtBatless) = toFabrikSpace foot batlessArm startPoint
+        (tgtArmBatless, errBatless) = fabrikApply linksBatless newArmBatless newTgtBatless
+        
+
+        batStart = head tgtArmBatless
+        target = pointToFabrikSpace foot arm endPoint
+
+        (_, newBatEnd) = reach (getLinkLength bat) batStart target batStart
+        m = fabrikSpaceToMotion (newBatEnd:tgtArmBatless)
+
+        errBat = norm $ target .-. newBatEnd
+
+
+
+        
+

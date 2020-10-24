@@ -9,6 +9,7 @@ import Data.Ext
 import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Maybe
+import GHC.Float
 
 import Debug.Trace
 
@@ -37,6 +38,10 @@ normalizeAngle a =
   let a1 = mod' a tau
       a2 = mod' (a + tau) tau
    in bool a2 (a2 - tau) (a2 > pi)
+
+-- | Convert a float point to a double point
+pointFloat2Double :: Point 2 Float -> Point 2 Double
+pointFloat2Double p = Point2 (float2Double $ view xCoord p) (float2Double $ view yCoord p)
 
 -- | Shortest Distance Between Two Angles in Radians [-pi, pi)
 deltaAngle :: (Num r, Ord r, Floating r, Fractional r, Real r) => r -> r -> r

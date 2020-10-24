@@ -328,122 +328,25 @@ stigAction t (tColl, Bat Opponent) bs arm =
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r
-stigPlanThreshold = threshold 0.1
+stigPlanThreshold = threshold 0.01
 
 -- | Calculates the possible motion values to achieve a point. If it fails it returns []
 stigPlanPnt :: Float -> Arm -> Point 2 Float -> IO Motion
 stigPlanPnt foot arm p
   | isTooFar = trace "Too Far" return []
-  | stigPlanThreshold 0 eB == 0 = return $ map normalizeAngle qB -- \$ jointVectorToMotion qB
+  | stigPlanThreshold 0 eB == 0 = return $ map normalizeAngle qB
   | otherwise = trace ("Error: " ++ show eB) return []
   where
     isTooFar = norm (p .-. Point2 foot 0) > 1.2 * armLength arm
-    {- (a, m) = getArmKinematicAndMotion foot arm
-    q = motionToJointVector m
-    (qB, eB) = newtonRaphsonIK a (homogeneousZero, pointToHomogenousPoint p) q -}
     (qB, eB) = fabrikToPoint foot arm p
 
 -- | Calculates the possible motion values to achieve a line segment. If it fails it returns []
 stigPlanSeg :: Float -> Arm -> LineSegment 2 () Float -> IO Motion
 stigPlanSeg foot arm s
-  | isOnlyBat = return [] -- No idea if we reach it because we can't move
-  | isOnlyBatJoint = return $ bool [] onlyBatJointQ onlyBatJointCheck -- If we can rotate the only useful joint to match the end point
-  | normalCheck = return $ map normalizeAngle qF
-  | otherwise = trace ("Errors" ++ show (eB, eBat)) return []
+  | stigPlanThreshold 0 eB == 0 && stigPlanThreshold 0 eBat == 0 = return m
+  | otherwise = return []
   where
-    -- Target Info
-    startPoint = s ^. (start . core)
-    p0 = pointToHomogenousPoint startPoint
-    endPoint = s ^. (end . core)
-    p1 = pointToHomogenousPoint endPoint
-
-    -- Simplifyied arm
-    simplerArm = simplifyArm arm
-
-    -- Fix the bat and all the joints until a new
-    revArm = reverse simplerArm -- Inverted arm with the bat at the start
-    bat = head revArm -- The first one is the Bat for segment
-    batLength = getLinkLength bat -- Bat Length
-
-    -- Batless arm. The first element is a joint (or nothing)
-    restArmRev = tail revArm
-
-    -- Joints between original bat and the next link to use as a bat for the rest
-    firstJointsRev = takeWhile isJoint restArmRev
-
-    -- The arm is a bat (or can be simplified to that) and nothing else
-    isOnlyBat = null firstJointsRev
-
-    -- Small arm with a bat for first link. Note that it can be empty
-    smallRev = dropWhile isJoint restArmRev
-
-    -- Small from base to new bat
-    smallArm = reverse smallRev
-
-    -- The arm is a bat and a joint (or can be simplified to that) and nothing else
-    isOnlyBatJoint = null smallArm
-
-    -- Base to End point of Segment
-    onlyBatJointBaseToP1 = p1 - homogeneousPoint (float2Double foot) 0
-    (onlyBatJointBaseToP1Normalized, onlyBatJointBaseToP1Norm) = normalize2D onlyBatJointBaseToP1
-
-    -- (onlyBatJointAngle, _) = newtonRaphsonAcos onlyBatJointAngleFirstApprox onlyBatJointAngleCos
-    onlyBatJointAngle = angleVector homogeneousVectorY onlyBatJointBaseToP1Normalized
-    onlyBatJointQ = reverse $ setFirstJointRest0 onlyBatJointAngle firstJointsRev
-
-    -- Check that the bat has the same length as the distance from base to endpoint
-    onlyBatJointCheck = stigPlanThreshold 0 (float2Double batLength - onlyBatJointBaseToP1Norm) == 0
-
-    -- From here we are in a normal case we have at least this form: link (bat) -- joint -- link -- base
-    -- Small Arm must reach the start point of segment
-    (a, m) = getArmKinematicAndMotion foot smallArm
-    q = motionToJointVector m
-    (qB, eB) = newtonRaphsonIK a (homogeneousZero, p0) q
-    mB = jointVectorToMotion qB
-
-    -- Small Arm Forward Transforms
-    fwdTIB = applyForwardKinematicTransInv a qB
-    fwdTBMatInv = applyForwardKinematicMatrixTransInv fwdTIB
-
-    -- p1Local Position
-    p1Local = fwdTBMatInv Numerical.#> p1
-
-    -- Vector from small bat to target
-    smallBatToP1 = p1Local - homogeneousZero
-    (smallBatToP1Normalized, smallBatToP1Norm) = normalize2D smallBatToP1
-
-    smallBatAngle = angleVector homogeneousVectorX smallBatToP1Normalized
-
-    qF = mB ++ reverse (setFirstJointRest0 smallBatAngle firstJointsRev)
-
-    endP = rotateTrans smallBatAngle Numerical.#> homogeneousPoint (float2Double batLength) 0
-    eBat = Numerical.norm_2 (p1Local - endP)
-
-    -- Check that small bat is at p0 and that we can reach p1
-    normalCheck =
-      stigPlanThreshold 0 eB == 0
-        && stigPlanThreshold 0 eBat == 0
-        && (stigPlanThreshold 0 (float2Double batLength - smallBatToP1Norm) == 0)
-
-    isJoint :: Element -> Bool
-    isJoint (Joint _ _) = True
-    isJoint _ = False
-    getLinkLength :: Element -> Float
-    getLinkLength (Link _ t) = t
-    setFirstJointRest0 :: Double -> Arm -> Motion
-    setFirstJointRest0 q as = double2Float q : map (const 0) (tail as)
-    cross2D :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
-    cross2D v1 v2 = Numerical.atIndex (Numerical.cross v1 v2) 2
-    normalize2D :: Numerical.Vector Numerical.R -> (Numerical.Vector Numerical.R, Numerical.R)
-    normalize2D v
-      | globalThreshold 0 vNorm == 0 = (homogeneousZero, 0)
-      | otherwise = (v / Numerical.scalar vNorm, vNorm)
-      where
-        vNorm = Numerical.norm_2 v
-
-    angleVector :: Numerical.Vector Numerical.R -> Numerical.Vector Numerical.R -> Numerical.R
-    angleVector v1 v2 = atan2 (cross2D v1 v2) (Numerical.dot v1 v2)
-
+    (m, eB, eBat) = fabrikToSegment foot arm s
 
 -- Testing Starts Here
 -- | Create a Test Case for stigPlanPnt

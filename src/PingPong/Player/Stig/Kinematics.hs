@@ -3,7 +3,7 @@ module PingPong.Player.Stig.Kinematics where
 
 import Control.Lens (view)
 import Data.Bool (bool)
-import Data.Geometry hiding (head, Vector, dot)
+import Data.Geometry hiding (Vector, dot, head)
 import Data.Maybe
 import GHC.Float
 import Numeric.LinearAlgebra hiding (Element)

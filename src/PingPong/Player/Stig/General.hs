@@ -2,8 +2,8 @@
 module PingPong.Player.Stig.General where
 
 import Data.Bool (bool)
+import Graphics.Gloss (Color, makeColor)
 import PingPong.Model
-import Graphics.Gloss ( Color, makeColor )
 import PingPong.Player.Stig.GeometryHelpers
 
 -- General Helpers
@@ -65,20 +65,20 @@ hotPink = makeColor 1.0 0.2 0.7 1
 -- | Read Arm from string
 readElement :: [String] -> Arm
 readElement [] = []
-readElement (t:val:rest)
-  | t == "link" = Link red (read val :: Float): readElement rest
-  | t == "joint" = Joint red (read val :: Float): readElement rest
+readElement (t : val : rest)
+  | t == "link" = Link red (read val :: Float) : readElement rest
+  | t == "joint" = Joint red (read val :: Float) : readElement rest
 
 -- | Read Foot and Arm from a list of lines as strings
 readArm :: [String] -> [(Float, Arm)]
 readArm [] = []
-readArm (sFoot:sArm:rest) = (read sFoot :: Float, readElement $ words sArm) : readArm rest
+readArm (sFoot : sArm : rest) = (read sFoot :: Float, readElement $ words sArm) : readArm rest
 
 -- | Calculates an arm length
 armLength :: Arm -> Float
 armLength [] = 0
 armLength (Link _ t : rest) = t + armLength rest
-armLength (_:rest) = armLength rest
+armLength (_ : rest) = armLength rest
 
 -- | Calculate Motion Velocity to a Motion. !Warning: no limits are applied
 armToMotion :: Arm -> Motion -> Motion

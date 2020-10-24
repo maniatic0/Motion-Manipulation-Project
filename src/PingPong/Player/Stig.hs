@@ -518,7 +518,7 @@ testPlanSeg (f, arm, sT, mT)
           let eB = xTargetGlobal - batGlobalB
           let eNormB = Numerical.norm_2 eB
 
-          let eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+          let eT = trace ("Best " ++ show (batGlobalB, eNormB, mB)) $ xTargetGlobal - batGlobalT
           let eNormT = Numerical.norm_2 eT
 
           let result = trace ("Target " ++ show (batGlobalT, eNormT, mT)) $

@@ -484,7 +484,7 @@ testPlanPnt (f, arm, pT, mT)
           let eT = trace ("Best " ++ show (batGlobalB, eNormB, mB)) $ xTargetGlobal - batGlobalT
           let eNormT = Numerical.norm_2 eT
 
-          let result = trace ("Target " ++ show (batGlobalT, eNormT, mT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+          let result = trace ("Target " ++ show (batGlobalT, eNormT, mT) ++ "\n") $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
           return $ result && (length mB == length mT)
  
 -- | Test Cases for testPlanPnt

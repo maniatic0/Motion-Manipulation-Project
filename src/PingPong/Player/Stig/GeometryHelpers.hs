@@ -10,6 +10,8 @@ import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Maybe
 
+import Debug.Trace
+
 -- Geometry Helpers
 
 -- | Threshold function
@@ -268,6 +270,13 @@ normalizeVector v = (n, len)
   where
     len = globalThreshold 0 $ norm v
     n = bool (Vector2 0 0) (v ^* (1 / len)) (len > 0)
+
+-- | Normalize a vector and get its norm
+normalizeVectorThreshold :: (Num r, Floating r, Ord r, Show r) => (r -> r -> r) -> Vector 2 r -> (Vector 2 r, r)
+normalizeVectorThreshold t v = (n, len)
+  where
+    len = t 0 $ norm v
+    n = bool (traceShow v $ Vector2 0 0) (v ^* (1 / len)) (len > 0)
 
 -- | Calculates a linear collision between a point and line
 movingBallMovingLineCollide ::

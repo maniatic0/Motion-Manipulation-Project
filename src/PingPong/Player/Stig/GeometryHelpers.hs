@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- By Christian Oliveros and Minmin Chen
 module PingPong.Player.Stig.GeometryHelpers where
 
@@ -54,6 +56,46 @@ outer2D v1 v2 = res
     x2 = view xComponent v2
     y2 = view yComponent v2
     res = (x1 * y2) - (y1 * x2)
+
+-- | Angle from v1 to v2
+-- https://scicomp.stackexchange.com/questions/27689/numerically-stable-way-of-computing-angles-between-vectors
+angleVectorPrecise :: (Num r, RealFloat r) => Vector 2 r -> Vector 2 r -> r
+angleVectorPrecise v1 v2 = atan2 (outer2D v1N v2N) (dot v1N v2N)
+  where
+    (v1N, _) = normalizeVector v1
+    (v2N, _) = normalizeVector v2
+
+-- | Angle from v1 to v2
+-- https://scicomp.stackexchange.com/questions/27689/numerically-stable-way-of-computing-angles-between-vectors
+angleVectorPrecise2 :: (Num r, RealFloat r) => Vector 2 r -> Vector 2 r -> r
+angleVectorPrecise2 v1 v2 = 2 * atan2 (norm $ v1N ^-^ v2N) (norm $ v1N ^+^ v2N)
+  where
+    (v1N, _) = normalizeVector v1
+    (v2N, _) = normalizeVector v2
+
+-- | Angle from v1 to v2
+-- https://scicomp.stackexchange.com/questions/27689/numerically-stable-way-of-computing-angles-between-vectors
+angleVectorPrecise3 :: forall r. (Num r, RealFloat r) => Vector 2 r -> Vector 2 r -> r
+angleVectorPrecise3 v1 v2 = 2 * atan (sqrt (numerator/denominator))
+  where
+    v1Norm = norm v1
+    v2Norm = norm v2
+
+    a = bool v2Norm v1Norm (v1Norm > v2Norm)
+    b = bool v1Norm v2Norm (v1Norm > v2Norm)
+    c = bool (norm (v2 ^-^ v1)) (norm (v1 ^-^ v2)) (v1Norm > v2Norm)
+
+    nu = calcNu a b c
+
+    numerator = ((a - b) + c) * nu
+    denominator = (a + (b + c)) * ((a - c) + b)
+
+    -- | Calculate Nu
+    calcNu :: r -> r -> r -> r
+    calcNu a0 b0 c0
+      | b0 >= c0 && c0 >= 0 = c0 - (a0-b0) 
+      | c0 > b0 && b0 >= 0 = b0 - (a0-c0) 
+      | otherwise = error "Invalid triangle"
 
 -- | Solve a x^2 + b * x + c. It can return more than one solution and the [] solution means that all x are valid
 solveQuadratic :: (Num r, Eq r, Ord r, Fractional r, Floating r) => r -> r -> r -> Maybe [r]

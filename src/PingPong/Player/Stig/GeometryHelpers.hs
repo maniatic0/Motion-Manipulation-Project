@@ -9,9 +9,8 @@ import Data.Ext
 import Data.Fixed (mod')
 import Data.Geometry hiding (head)
 import Data.Maybe
-import GHC.Float
-
 import Debug.Trace
+import GHC.Float
 
 -- Geometry Helpers
 
@@ -103,7 +102,7 @@ angleVectorPrecise2Signed v1 v2 = sign * 2 * atan2 (norm $ v1N ^-^ v2N) (norm $ 
 -- | Angle from v1 to v2
 -- https://scicomp.stackexchange.com/questions/27689/numerically-stable-way-of-computing-angles-between-vectors
 angleVectorPrecise3 :: forall r. (Num r, RealFloat r) => Vector 2 r -> Vector 2 r -> r
-angleVectorPrecise3 v1 v2 = 2 * atan (sqrt (numerator/denominator))
+angleVectorPrecise3 v1 v2 = 2 * atan (sqrt (numerator / denominator))
   where
     v1Norm = norm v1
     v2Norm = norm v2
@@ -117,17 +116,16 @@ angleVectorPrecise3 v1 v2 = 2 * atan (sqrt (numerator/denominator))
     numerator = ((a - b) + c) * nu
     denominator = (a + (b + c)) * ((a - c) + b)
 
-    -- | Calculate Nu
     calcNu :: r -> r -> r -> r
     calcNu a0 b0 c0
-      | b0 >= c0 && c0 >= 0 = c0 - (a0-b0) 
-      | c0 > b0 && b0 >= 0 = b0 - (a0-c0) 
+      | b0 >= c0 && c0 >= 0 = c0 - (a0 - b0)
+      | c0 > b0 && b0 >= 0 = b0 - (a0 - c0)
       | otherwise = error "Invalid triangle"
 
 -- | Angle from v1 to v2
 -- https://scicomp.stackexchange.com/questions/27689/numerically-stable-way-of-computing-angles-between-vectors
 angleVectorPrecise3Signed :: forall r. (Num r, RealFloat r) => Vector 2 r -> Vector 2 r -> r
-angleVectorPrecise3Signed v1 v2 = sign * 2 * atan (sqrt (numerator/denominator))
+angleVectorPrecise3Signed v1 v2 = sign * 2 * atan (sqrt (numerator / denominator))
   where
     v1Norm = norm v1
     v2Norm = norm v2
@@ -144,11 +142,10 @@ angleVectorPrecise3Signed v1 v2 = sign * 2 * atan (sqrt (numerator/denominator))
     perp = outer2D v1 v2
     sign = bool 1 (-1) (perp < 0)
 
-    -- | Calculate Nu
     calcNu :: r -> r -> r -> r
     calcNu a0 b0 c0
-      | b0 >= c0 && c0 >= 0 = c0 - (a0-b0) 
-      | c0 > b0 && b0 >= 0 = b0 - (a0-c0) 
+      | b0 >= c0 && c0 >= 0 = c0 - (a0 - b0)
+      | c0 > b0 && b0 >= 0 = b0 - (a0 - c0)
       | otherwise = error "Invalid triangle"
 
 -- | Solve a x^2 + b * x + c. It can return more than one solution and the [] solution means that all x are valid

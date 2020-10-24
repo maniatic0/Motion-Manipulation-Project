@@ -481,16 +481,32 @@ testPlanPnt (f, arm, pT, mT)
           let eB = xTargetGlobal - batGlobalB
           let eNormB = Numerical.norm_2 eB
 
-          let eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
+          let eT = trace ("Best " ++ show (batGlobalB, eNormB, mB)) $ xTargetGlobal - batGlobalT
           let eNormT = Numerical.norm_2 eT
 
-          let result = trace ("Target " ++ show (batGlobalT, eNormT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
+          let result = trace ("Target " ++ show (batGlobalT, eNormT, mT)) $ (globalThreshold 0 eNormB == 0) && (eNormB <= eNormT)
           return $ result && (length mB == length mT)
  
 -- | Test Cases for testPlanPnt
 planPntTestCases :: [(Float, Arm, Point 2 Float, Motion)]
 planPntTestCases =
   [ createPlanPntCase
+      0
+      [
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (0, 0.1)
+      [0],
+    createPlanPntCase
+      0
+      [
+        Joint red 0.0,
+        Link red 0.1
+      ]
+      (0.1, 0)
+      [pi/2],
+    createPlanPntCase
       1.5
       [ Link red 0.2,
         Joint red 0.0,
@@ -602,7 +618,7 @@ testPlanSeg (f, arm, sT, mT)
           let eT = trace ("Best " ++ show (batGlobalB, eNormB)) $ xTargetGlobal - batGlobalT
           let eNormT = Numerical.norm_2 eT
 
-          let result = trace ("Target " ++ show (batGlobalT, eNormT)) $
+          let result = trace ("Target " ++ show (batGlobalT, eNormT, mT)) $
                 (globalThreshold 0 eNormB == 0)
                   && ((eNormB <= eNormT) || (eNormT > 0 && eNormB / eNormT <= 1.1) || (eNormT == 0 && globalThreshold 0 eNormB == 0))
           return $ result && bool (trace "Different Motion Sizes" False) True (length mB == length mT)

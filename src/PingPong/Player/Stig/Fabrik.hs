@@ -16,8 +16,8 @@ reach :: (Num r, Floating r, Ord r) => Point 2 r -> Point 2 r -> Point 2 r -> (P
 reach p1 p0 target = (target, tailP)
     where
         lDist = norm (p0 .-. p1)
-        (nlDir, _) = normalizeVector $ p0 .-. target
-        tailP = p1 .+^ (nlDir ^* lDist)
+        nlDir = p0 .-. target
+        tailP = p1 .+^ (nlDir ^* (lDist / norm nlDir))
 
 -- | FABRIK internal iteration
 fabrikIter :: (Num r, Floating r, Ord r) => [Point 2 r] -> Point 2 r -> [Point 2 r]
@@ -47,7 +47,7 @@ fabrikMaxIter = 1000
 fabrikAlgo :: (Num r, Floating r, Ord r, Show r) => Int -> [Point 2 r] -> Point 2 r -> ([Point 2 r], r)
 fabrikAlgo iter arm tgt
     | (iter + 1) >= fabrikMaxIter = trace ("Max Iter " ++ show err) (newArm, err)
-    |  fabrikThreshold 0 err == 0 = trace ("Reached " ++ show err ++ " " ++ show iter)(newArm, err)
+    |  fabrikThreshold 0 err == 0 = trace ("Reached " ++ show err ++ " " ++ show iter) (newArm, err)
     | otherwise = fabrikAlgo (iter + 1) newArm tgt
     where
         (newArm, err) = fabrikStep arm tgt
@@ -70,10 +70,10 @@ toFabrikSpace foot arm tgt = (newArm, newTgt)
         -- if we start 
         -- We are centered at the base of the arm which we put at (0,0), move space there
         tgtDouble = Point2 (float2Double $ view xCoord tgt) (float2Double $ view yCoord tgt)
-        newTgt = tgtDouble .-^ Vector2 (float2Double foot) (bool 0 (getLinkLength armHead) startsLink)
+        newTgt = tgtDouble -- .-^ Vector2 (float2Double foot) (bool 0 (getLinkLength armHead) startsLink)
 
         -- We centered space at (0,0), which is the base of the robot (if it uses first link, then we moved that as well)
-        base = Point2 0 0
+        base = Point2 (float2Double foot) (bool 0 (getLinkLength armHead) startsLink)
 
         -- Create Fabrik arm, it goes from end effector to base
         newArm = reverse $ base:armToFabrik base (if startsLink then tail simpleArm else simpleArm)
@@ -94,19 +94,19 @@ toFabrikSpace foot arm tgt = (newArm, newTgt)
 fabrikSpaceToMotion :: [Point 2 Double] -> Motion
 fabrikSpaceToMotion arm = fabrikSpaceToMotionInternal (Vector2 0 1) armInv
     where
-        armInv = reverse arm
+        armInv = traceShow arm reverse arm
 
         -- | Converts a fabrik arm from base to end effector to the motion representation
         fabrikSpaceToMotionInternal :: Vector 2 Double -> [Point 2 Double] -> Motion
         fabrikSpaceToMotionInternal _ [_] = []
-        fabrikSpaceToMotionInternal v (p0:p1:rest) = double2Float angle : fabrikSpaceToMotionInternal nV (p1:rest)
+        fabrikSpaceToMotionInternal v (p0:p1:rest) = traceShow angle $ double2Float angle : fabrikSpaceToMotionInternal nV (p1:rest)
             where
-                nV = p1 .-. p0
-                angle = angleVectorPrecise3 v nV
+                nV = trace (show p0 ++ " to " ++ show p1) p1 .-. p0
+                angle = traceShow nV angleVectorPrecise2Signed v nV
 
 -- | Fabrik to Point
 fabrikToPoint :: Float -> Arm -> Point 2 Float -> (Motion, Double)
-fabrikToPoint foot arm tgt = (m, err)
+fabrikToPoint foot arm tgt = traceShow (m, err) (m, err)
     where
         (newArm, newTgt) = toFabrikSpace foot arm tgt
         (tgtArm, err) = fabrikApply newArm newTgt

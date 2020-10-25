@@ -120,7 +120,7 @@ predictBestInterceptionTime p v = res
     ts = [freeFallMaxHeightTime v, freeFallTimeToXPos p v simulationTableMaxX, freeFallTimeToXPos p v (simulationTableMaxX / 2), freeFallTimeToXPos p v (simulationTableMaxX / 4)]
     tF = filter tFilter ts
 
-    res =  if null tF then Nothing else Just $ minimum tF
+    res =  if null tF then Nothing else Just $ traceShowId $ minimum tF
 
     tFilter :: Float -> Bool
     tFilter t = 0 <= t && checkValidPos p0
@@ -135,10 +135,12 @@ placeBatInBounceCurve p v = line
   where
     
     -- Normal to Velocity
-    --n = freefallNormal v
-    (n, _) = normalizeVector v
+    n = freefallNormal v
+    --(n, _) = normalizeVector v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
     p1 = p .-^ (n ^* (simulationBatLength / 2))
+    {- p0 = p
+    p1 = p .+^ (n ^* simulationBatLength) -}
     p0Dist = distToSpecialBase p0
     p1Dist = distToSpecialBase p1
     
@@ -153,7 +155,13 @@ placeBatInBounceCurve p v = line
 tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
 tryInterceptBall arm p v tColl =
    do 
-      -- Other player did a proper hit we have to respond to 
+     let tX = freeFallTimeToXPos p v 1.2
+     let (pN, vN) = freeFallEvaluateTime p v (tX + 0.01)
+     let bat = placeBatInBounceCurve pN vN
+     let (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
+     let mV = armToMotion arm mIntercept
+     return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) mV --applyMotionLimits mV -- Velocity limits
+      {- -- Other player did a proper hit we have to respond to 
       let tPossible = predictBestInterceptionTime p v
 
       let toRest = armToStigRestMotion arm
@@ -171,7 +179,7 @@ tryInterceptBall arm p v tColl =
             [] -> return $ trace ("Opponent did a proper hit we can't catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits toRest -- Velocity limits
             _ -> do
               let mV = armToMotion arm mIntercept
-              return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits
+              return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits -}
 
 -- | Stig's player
 stig :: Player
@@ -197,9 +205,9 @@ stigArm :: Arm
 stigArm =
   checkArm
     [ Link paleBlue 0.5,
-      Joint red (-0.3), -- (0.1)
-      Link paleBlue 0.4,
-      Joint red 1.3, -- (0.1)
+      Joint red 0.7, -- (0.1)
+      --Link paleBlue 0.3,
+      --Joint red 1.3, -- (0.1)
       Link paleBlue 0.3,
       Joint red 0.9, -- (-0.1)
       Link paleBlue 0.2,
@@ -312,9 +320,7 @@ stigAction t (tColl, Table Self) bs arm =
       let v = dir bs
       tryInterceptBall arm p v tColl
 stigAction t (tColl, Bat Opponent) bs arm =
-  do 
-      -- this is just in the case we can reach it
-      let toRest = armToStigRestMotion arm
+  do
 
       -- Other player did a hit we have to respond to 
       let p = loc bs
@@ -324,7 +330,7 @@ stigAction t (tColl, Bat Opponent) bs arm =
 
       case mayBounce of
         Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) applyMotionLimits (armToMotion arm stigNoMotion) -- Velocity limits
-        Just (pT, vT, _) -> tryInterceptBall arm pT vT tColl
+        Just (pT, vT, _) -> trace ("Opponent did a proper hit at " ++ show tColl) tryInterceptBall arm pT vT tColl
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

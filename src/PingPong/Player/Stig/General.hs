@@ -84,7 +84,6 @@ armLength (_ : rest) = armLength rest
 armToMotion :: Arm -> Motion -> Motion
 armToMotion ar m = zipWith f m $ getCurrentJoints ar
   where
-    g = globalThreshold 0.0
-    f = deltaAngle . g
+    f = deltaAngle
 
 -- End of General Helpers

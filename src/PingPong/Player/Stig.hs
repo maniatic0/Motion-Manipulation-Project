@@ -221,7 +221,7 @@ stigArmLength = armLength stigArm
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.5
+stigFoot = 1.2
 
 -- | Stig rest postion
 stigRest :: Motion

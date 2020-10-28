@@ -18,6 +18,8 @@ import PingPong.Player.Stig.GeometryHelpers
 import PingPong.Player.Stig.Kinematics
 import PingPong.Player.Stig.Fabrik
 
+import PingPong.Simulation (reflectVector)
+
 import Control.Monad
 
 -- | Simulation's gravity
@@ -46,7 +48,7 @@ simulationBatLength = 0.1
 
 -- | Simulation's Table Center X Position
 simulationTableOpponentCenterX :: Float
-simulationTableOpponentCenterX = -0.4
+simulationTableOpponentCenterX = -0.5
 
 -- | Simulation's Table Max X Position
 simulationTableOpponentMinX :: Float
@@ -92,7 +94,7 @@ reflectVelocityTable v = reflect v simulationTableDir
 
 -- | Reflect Ball Velocity against a bat
 reflectVelocityBat :: LineSegment 2 () Float -> Vector 2 Float -> Vector 2 Float
-reflectVelocityBat bat v = reflect v (segmentDir bat)
+reflectVelocityBat bat v = reflectVector v (segmentDir bat)
 
 -- | Get the normal of the free fall velocity
 freefallNormal :: Vector 2 Float -> Vector 2 Float
@@ -169,10 +171,10 @@ placeBatInBounceCurve p v q = line
 
 -- | Maximum ITerations to guess
 binaryGuessMaxIter :: Int
-binaryGuessMaxIter = 100
+binaryGuessMaxIter = 10
 -- | Max Binary guess
 binaryGuessLimit :: Float
-binaryGuessLimit = pi/3
+binaryGuessLimit = pi/2
 
 -- | Place the ball at the center of the opponents table
 rotateBatToCenter :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
@@ -181,10 +183,10 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" place
     -- If we are going up
     goingUp = view yComponent v > 0
 
-    finalGuess =
+    finalGuess = -- binaryGuess 0 (-binaryGuessLimit) binaryGuessLimit 0
       bool 
-        (binaryGuess 0 (-binaryGuessLimit) 0 (-binaryGuessLimit/2))
-        (binaryGuess 0 0 binaryGuessLimit (binaryGuessLimit/2)) 
+        (binaryGuess 0 (-pi*2/3) (0) (-pi/4)) 
+        (binaryGuess 0 (-pi*2/3) (0) (-pi/4))
         goingUp
 
     -- | Guess a possible bat possition
@@ -202,17 +204,22 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" place
         (pI, _) = freeFallEvaluateTime p nV t
         pIX = view xCoord pI
 
+        -- If Bounce is going up
+        bounceGoingUp = view yComponent nV > 0
+
+        guessDir = not goingUp
+
         -- Guess Selection to improve
         guessTry x True = case insideOpponentTableX x of
-                  Below _ -> binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
-                  Above _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-                  Inside _ -> trace ("Inside Selected q=" ++ show qcurr) Just bat
+                  Above _ -> trace ("X=" ++ show x ++ " T:Below" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+                  Below _ -> trace ("X=" ++ show x ++ " T:Above" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+                  Inside _ -> trace ("X=" ++ show x ++ " Inside Selected q=" ++ show qcurr) Just bat
         guessTry x False = case insideOpponentTableX x of
-          Above _ -> binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
-          Below _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-          Inside _ -> trace ("Inside Selected q=" ++ show qcurr) Just bat
+          Below _ -> trace ("X=" ++ show x ++ " F:Above" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+          Above _ -> trace ("X=" ++ show x ++ " F:Below" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Inside _ -> trace ("X=" ++ show x ++ " Inside Selected q=" ++ show qcurr) Just bat
 
-        guess = guessTry pIX goingUp
+        guess = traceShow (p, nV, t, pI) guessTry pIX guessDir
 
 
 -- | Try to intercept Ball

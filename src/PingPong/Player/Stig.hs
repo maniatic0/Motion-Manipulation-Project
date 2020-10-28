@@ -7,7 +7,7 @@ where
 import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
 import Data.Ext
-import Data.Geometry hiding (head)
+import Data.Geometry hiding (head, Above, Below)
 import Data.Maybe
 import Debug.Trace
 import GHC.Float
@@ -44,6 +44,18 @@ simulationTableDir = Vector2 (-1) 0
 simulationBatLength :: Float
 simulationBatLength = 0.1
 
+-- | Simulation's Table Center X Position
+simulationTableOpponentCenterX :: Float
+simulationTableOpponentCenterX = -0.4
+
+-- | Simulation's Table Max X Position
+simulationTableOpponentMinX :: Float
+simulationTableOpponentMinX = -0.8
+
+-- | If the x value is inside the opponent's table range
+insideOpponentTableX :: Float -> DistanceToRange Float
+insideOpponentTableX = signedDistanceToRange simulationTableOpponentMinX simulationTableOpponentCenterX
+
 -- | Predict the time (relative to current time) the gravity parabole is going to intersect a height
 predictFreefallHeightInter :: Point 2 Float -> Vector 2 Float -> Float -> Maybe Float 
 predictFreefallHeightInter p v tH = bool res Nothing (isNothing possible || null tsRaw) 
@@ -77,6 +89,10 @@ freeFallEvaluateTime p v t = (Point2 x y, Vector2 vx vy)
 -- | Reflect a velocity vector againts the table like in a collision
 reflectVelocityTable :: Vector 2 Float -> Vector 2 Float
 reflectVelocityTable v = reflect v simulationTableDir
+
+-- | Reflect Ball Velocity against a bat
+reflectVelocityBat :: LineSegment 2 () Float -> Vector 2 Float -> Vector 2 Float
+reflectVelocityBat bat v = reflect v (segmentDir bat)
 
 -- | Get the normal of the free fall velocity
 freefallNormal :: Vector 2 Float -> Vector 2 Float
@@ -130,12 +146,13 @@ predictBestInterceptionTime p v = res
 
 
 -- | Place the bat normal to a ball point and velocity
-placeBatInBounceCurve :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
-placeBatInBounceCurve p v = line
+placeBatInBounceCurve :: Point 2 Float -> Vector 2 Float -> Float -> LineSegment 2 () Float
+placeBatInBounceCurve p v q = line
   where
     
     -- Normal to Velocity
-    n = freefallNormal v
+    n0 = freefallNormal v
+    n = rotateVector2D (q + pi/2) n0
     --(n, _) = normalizeVector v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
     p1 = p .-^ (n ^* (simulationBatLength / 2))
@@ -150,6 +167,53 @@ placeBatInBounceCurve p v = line
     distToSpecialBase :: Point 2 Float -> Float
     distToSpecialBase po = norm $ po .-. Point2 stigFoot simulationTableHeight
 
+-- | Maximum ITerations to guess
+binaryGuessMaxIter :: Int
+binaryGuessMaxIter = 100
+-- | Max Binary guess
+binaryGuessLimit :: Float
+binaryGuessLimit = pi/3
+
+-- | Place the ball at the center of the opponents table
+rotateBatToCenter :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
+rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" placeBatInBounceCurve p v 0) finalGuess
+  where
+    -- If we are going up
+    goingUp = view yComponent v > 0
+
+    finalGuess =
+      bool 
+        (binaryGuess 0 (-binaryGuessLimit) 0 (-binaryGuessLimit/2))
+        (binaryGuess 0 0 binaryGuessLimit (binaryGuessLimit/2)) 
+        goingUp
+
+    -- | Guess a possible bat possition
+    binaryGuess iter qmin qmax qcurr
+      | noTPossible = trace "No interception with table?!" Nothing 
+      | iter >= binaryGuessMaxIter = trace ("Max Iter Selected q=" ++ show qcurr) Just bat
+      | otherwise = guess
+      where
+        -- Generate bat
+        bat = placeBatInBounceCurve p v qcurr
+        nV = reflectVelocityBat bat v
+        tPossible = predictFreefallHeightInter p nV simulationTableHeight
+        noTPossible = isNothing tPossible
+        t = fromJust tPossible
+        (pI, _) = freeFallEvaluateTime p nV t
+        pIX = view xCoord pI
+
+        -- Guess Selection to improve
+        guessTry x True = case insideOpponentTableX x of
+                  Below _ -> binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+                  Above _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+                  Inside _ -> trace ("Inside Selected q=" ++ show qcurr) Just bat
+        guessTry x False = case insideOpponentTableX x of
+          Above _ -> binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Below _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+          Inside _ -> trace ("Inside Selected q=" ++ show qcurr) Just bat
+
+        guess = guessTry pIX goingUp
+
 
 -- | Try to intercept Ball
 tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
@@ -157,10 +221,14 @@ tryInterceptBall arm p v tColl =
    do 
      let tX = freeFallTimeToXPos p v 1.2
      let (pN, vN) = freeFallEvaluateTime p v (tX + 0.01)
-     let bat = placeBatInBounceCurve pN vN
+     let bat = rotateBatToCenter pN vN
+     let batInv = segmentInvert bat
      let (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
+     let (mInterceptInv, _, _) = fabrikToSegment stigFoot arm batInv
      let mV = armToMotion arm mIntercept
-     return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) mV --applyMotionLimits mV -- Velocity limits
+     let mVInv = armToMotion arm mInterceptInv
+     let bM = bool mVInv mV (motionAverage mV <= motionAverage mVInv)
+     return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat ++ "\n" ++ show bM) bM --applyMotionLimits mV -- Velocity limits
       {- -- Other player did a proper hit we have to respond to 
       let tPossible = predictBestInterceptionTime p v
 
@@ -211,7 +279,7 @@ stigArm =
       Link paleBlue 0.3,
       Joint red 0.9, -- (-0.1)
       Link paleBlue 0.2,
-      Joint red 0.5, -- (-0.1)
+      Joint red (1.3), -- (-0.1)
       Link hotPink 0.1 -- Bat
     ]
 
@@ -221,7 +289,7 @@ stigArmLength = armLength stigArm
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.2
+stigFoot = 1.5
 
 -- | Stig rest postion
 stigRest :: Motion

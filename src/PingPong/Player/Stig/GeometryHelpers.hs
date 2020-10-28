@@ -7,7 +7,7 @@ import Control.Lens (view, (&), (.~), (^.))
 import Data.Bool (bool)
 import Data.Ext
 import Data.Fixed (mod')
-import Data.Geometry hiding (head)
+import Data.Geometry hiding (Above, Below, head)
 import Data.Maybe
 import Debug.Trace
 import GHC.Float
@@ -330,5 +330,41 @@ movingBallMovingLineCollide (t0, p0, l0) (t1, p1, l1)
     rVd = reflect vd lcDirNormalized -- Use line as normal for reflection if possible. In case the line degenerated to a point use HalfVector
     cvd = rVd ^+^ lcv -- Collision Velocity Direction
     pCol = pc .+^ (cvd ^* (t1 - tcScaled))
+
+-- | Rotate a 2D Vector by angle q
+rotateVector2D :: (Num r, Floating r, Ord r, Show r) => r -> Vector 2 r -> Vector 2 r
+rotateVector2D q v0 = Vector2 (x * c - y * s) (x * s + c * y)
+  where
+    c = cos q
+    s = sin q
+    x = view xComponent v0
+    y = view yComponent v0
+
+-- | Distance to a Range
+data DistanceToRange r
+  = Above r
+  | Below r
+  | Inside r
+  deriving (Show)
+
+-- | Sgined Distance to Range [a,b] (a<=b)
+signedDistanceToRange :: (Num r, Floating r, Ord r, Show r) => r -> r -> r -> DistanceToRange r
+signedDistanceToRange a b t
+  | above = Above $ b - t
+  | below = Below $ a - t
+  | otherwise = Inside $ min (t - a) (b - t)
+  where
+    above = b < t
+    below = t < a
+
+-- | Get a segments direction
+segmentDir :: (Num r, Floating r, Ord r, Show r) => LineSegment 2 () r -> Vector 2 r
+segmentDir s = n
+  where
+    (n, _) = normalizeVector $ (s ^. end . core) .-. (s ^. start . core)
+
+-- | Invert a segment
+segmentInvert :: (Num r, Floating r, Ord r, Show r) => LineSegment 2 () r -> LineSegment 2 () r 
+segmentInvert l = ClosedLineSegment (l ^. end . core :+ ()) (l ^. start . core :+ ())
 
 -- End of Geometry Helpers

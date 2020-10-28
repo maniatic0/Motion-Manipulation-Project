@@ -86,4 +86,8 @@ armToMotion ar m = zipWith f m $ getCurrentJoints ar
   where
     f = deltaAngle
 
+-- | Motion Average
+motionAverage :: Motion -> Float
+motionAverage m = sum (map abs m) / fromIntegral (length m)
+
 -- End of General Helpers

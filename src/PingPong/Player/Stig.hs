@@ -171,10 +171,6 @@ placeBatInBounceCurve p v q = line
 binaryGuessMaxIter :: Int
 binaryGuessMaxIter = 10
 
--- | Max Binary guess
-binaryGuessLimit :: Float
-binaryGuessLimit = pi/2
-
 -- | Place the ball at the center of the opponents table
 rotateBatToCenter :: Point 2 Float -> Vector 2 Float -> DistanceToRange (Float, LineSegment 2 () Float)
 rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below (read "Infinity" :: Float, placeBatInBounceCurve p v 0)) finalGuess
@@ -228,13 +224,31 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
         guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
 
 
+step = (1.2 - 0.8) / 10
+
+moveBatToCenter :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
+moveBatToCenter p v = moveBinary 0 0.8 1.2 1.2
+  where
+    -- Binary approach to good bat center
+    moveBinary iter xMin xMax x
+      | iter >= binaryGuessMaxIter = bat
+      | otherwise = guessTry possible
+      where
+        tX = freeFallTimeToXPos p v x
+        (pN, vN) = freeFallEvaluateTime p v tX
+        possible = rotateBatToCenter pN vN
+        (xB, bat) = getDistanceToRangeContent possible
+
+        guessTry (Inside _) = trace ("X=" ++ show x ++ " Impact: " ++ show xB) bat
+        guessTry (Above _) = trace ("X=" ++ show x ++ " Above:Impact: " ++ show xB)  moveBinary (iter + 1) x xMax (x + step)
+        guessTry (Below _) = trace ("X=" ++ show x ++ " Below:Impact: " ++ show xB)  moveBinary (iter + 1) xMin x (x - step)
+
+
 -- | Try to intercept Ball
 tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
 tryInterceptBall arm p v tColl =
    do 
-     let tX = freeFallTimeToXPos p v 1.2
-     let (pN, vN) = freeFallEvaluateTime p v (tX + 0.01)
-     let (x, bat) = getDistanceToRangeContent $ rotateBatToCenter pN vN
+     let bat = moveBatToCenter p v
      let batInv = segmentInvert bat
      let (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
      let (mInterceptInv, _, _) = fabrikToSegment stigFoot arm batInv
@@ -242,25 +256,7 @@ tryInterceptBall arm p v tColl =
      let mVInv = armToMotion arm mInterceptInv
      let bM = bool mVInv mV (motionAverage mV <= motionAverage mVInv)
      return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat ++ "\n" ++ show bM) bM --applyMotionLimits mV -- Velocity limits
-      {- -- Other player did a proper hit we have to respond to 
-      let tPossible = predictBestInterceptionTime p v
 
-      let toRest = armToStigRestMotion arm
-
-      case tPossible of
-        Nothing -> return $ trace ("Opponent did a proper hit we can't intercept at " ++ show tColl) applyMotionLimits toRest
-        Just tP -> do
-          let (pM, vM) = freeFallEvaluateTime p v tP
-          let bat = placeBatInBounceCurve pM vM
-
-          -- this is just in the case we can reach it
-          mIntercept <- stigPlanSeg stigFoot arm bat
-
-          case mIntercept of
-            [] -> return $ trace ("Opponent did a proper hit we can't catch at " ++ show tColl ++ " " ++ show bat) applyMotionLimits toRest -- Velocity limits
-            _ -> do
-              let mV = armToMotion arm mIntercept
-              return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat) applyMotionLimits mV -- Velocity limits -}
 
 -- | Stig's player
 stig :: Player
@@ -277,24 +273,28 @@ stig =
       collide = stigCollide,
       planPnt = stigPlanPnt,
       planSeg = stigPlanSeg,
-      stretch = \_ _ -> return stigNoMotion,
-      dance   = \_ _ -> return stigNoMotion
+      stretch = \_ arm -> return $ armToStigRestMotion arm,
+      dance   = \_ arm -> return $ armToStigRestMotion arm
     }
+
+
+-- Internal Stig Arm
+stigInternalArm :: Arm
+stigInternalArm = checkArm
+    [ Link paleBlue 0.5,
+      Joint red (0.5112798), -- (0.1)
+      Link paleBlue 0.3,
+      Joint red 1.247675, -- (0.1)
+      Link paleBlue 0.2,
+      Joint red 0.4820231, -- (-0.1)
+      Link paleBlue 0.2,
+      Joint red (-2.2409778), -- (-0.1)
+      Link hotPink 0.1 -- Bat
+    ]
 
 -- | Arm to use
 stigArm :: Arm
-stigArm =
-  checkArm
-    [ Link paleBlue 0.5,
-      Joint red 0, -- (0.1)
-      Link paleBlue 0.3,
-      Joint red 1.0, -- (0.1)
-      Link paleBlue 0.2,
-      Joint red 0.8, -- (-0.1)
-      Link paleBlue 0.2,
-      Joint red (1.3), -- (-0.1)
-      Link hotPink 0.1 -- Bat
-    ]
+stigArm = mapMotion stigInternalArm stigRest
 
 -- | Stig Arm Length
 stigArmLength :: Float
@@ -302,13 +302,19 @@ stigArmLength = armLength stigArm
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.5
+stigFoot = 1.4
 
 -- | Stig rest postion
 stigRest :: Motion
 stigRest = m
   where
-    (m, _) = fabrikToPoint stigFoot stigArm (Point2 1.2 0.8)
+    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 1.1 0.65 :+()) (Point2 1.1 0.75 :+()))
+
+-- | Stig rest 2 postion
+stigRest2 :: Motion
+stigRest2 = m
+  where
+    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.63 :+()) (Point2 0.9 0.73 :+()))
 
 -- | Get the a zeroed Motion list for Stig's arm
 stigNoMotion :: Motion
@@ -319,6 +325,10 @@ stigNoMotion = map f stigRest
 -- | Calculate Motion Velocity to Rest Motion. !Warning: no limits are applied
 armToStigRestMotion :: Arm -> Motion
 armToStigRestMotion ar = armToMotion ar stigRest 
+
+-- | Calculate Motion Velocity to Rest Motion2. !Warning: no limits are applied
+armToStigRestMotion2 :: Arm -> Motion
+armToStigRestMotion2 ar = armToMotion ar stigRest2 
 
 -- | Check collision of moving line and point
 stigCollide ::
@@ -382,15 +392,17 @@ stigAction _ (tColl, Other _) _ arm =
 stigAction _ (tColl, Bat Self) _ arm =
   return $
     -- We hit the ball, go to rest motion
-     trace ("We just hit the ball at " ++ show tColl) stigNoMotion -- Velocity limits
-stigAction _ (tColl, Table Opponent) _ _ =
+    let toRest2 = armToStigRestMotion2 arm 
+     in trace ("We just hit the ball at " ++ show tColl) toRest2 -- Velocity limits
+stigAction _ (tColl, Table Opponent) _ arm =
   return $
     -- Our hit was correct and we reached the other player's side
     -- So rest
-     trace ("We did a proper hit at " ++ show tColl) stigNoMotion
+    let toRest2 = armToStigRestMotion2 arm 
+     in trace ("We did a proper hit at " ++ show tColl) toRest2
 stigAction t (tColl, Air) bs arm =
   return $
-    -- IInvalid State
+    -- Invalid State
     let toBase = armToMotion arm stigNoMotion
      in trace ("Impossible State " ++ show tColl) applyMotionLimits toBase -- Velocity limits
 stigAction t (tColl, Table Self) bs arm =
@@ -410,7 +422,7 @@ stigAction t (tColl, Bat Opponent) bs arm =
       let mayBounce = predictTableBounce p v
 
       case mayBounce of
-        Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) applyMotionLimits (armToMotion arm stigNoMotion) -- Velocity limits
+        Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) (armToStigRestMotion arm) -- Velocity limits
         Just (pT, vT, _) -> trace ("Opponent did a proper hit at " ++ show tColl) tryInterceptBall arm pT vT tColl
 
 -- | Stig Plan Threshold

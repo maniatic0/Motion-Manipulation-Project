@@ -347,6 +347,11 @@ data DistanceToRange r
   | Inside r
   deriving (Show)
 
+-- | If the DistanceToRange is inside
+isInside :: DistanceToRange r -> Bool
+isInside (Inside _) = True
+isInside _ = False
+
 -- | Gets the content of a DistanceToRange
 getDistanceToRangeContent :: DistanceToRange r -> r
 getDistanceToRangeContent (Above a) = a

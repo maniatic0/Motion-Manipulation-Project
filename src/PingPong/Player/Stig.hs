@@ -24,6 +24,10 @@ import Control.Monad
 simulationGravity :: Float
 simulationGravity = 2
 
+-- | Simulation's max speed
+simulationMaxSpeed :: Float
+simulationMaxSpeed = 2
+
 -- | Simulation's Table Height
 simulationTableHeight :: Float
 simulationTableHeight = 0.5
@@ -223,39 +227,65 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
 
         guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
 
+-- | Move bat to center low limit
+moveBatToCenterLowLim :: Float
+moveBatToCenterLowLim = 0.6
 
-step = (1.2 - 0.8) / 10
+-- | Move bat to center high limit
+moveBatToCenterHighLim :: Float
+moveBatToCenterHighLim = 1.5
 
-moveBatToCenter :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
-moveBatToCenter p v = moveBinary 0 0.8 1.2 1.2
+
+-- | Move bat to center number of steps
+moveBatToCenterSteps :: Float
+moveBatToCenterSteps = 40
+
+-- | Move bat to center step size
+moveBatToCenterStepSize :: Float
+moveBatToCenterStepSize = (moveBatToCenterHighLim - moveBatToCenterLowLim) / moveBatToCenterSteps
+
+-- | Maximum Time apply Motion
+maxTimeToMotion :: Motion-> Float
+maxTimeToMotion m = maximum $ map (\v -> abs v / simulationMaxSpeed) m
+
+
+bestMotion :: Arm -> Point 2 Float -> Vector 2 Float -> Motion
+bestMotion arm p v = finalMotion
   where
-    -- Binary approach to good bat center
-    moveBinary iter xMin xMax x
-      | iter >= binaryGuessMaxIter = bat
-      | otherwise = guessTry possible
+    (finalMotion, _) = move 0 moveBatToCenterHighLim
+    -- Approach to good bat center
+    move iter x
+      | iter >= moveBatToCenterSteps || moveBatToCenterLowLim > x = (bM, bMV) -- Limit
+      | isInside possible = bool (bMN, mVN) (bM, bMV) (bMV <= mVN) -- We are inside check if we are better
+      | otherwise = (bMN, bMV) -- We are not inside, continue checking
       where
         tX = freeFallTimeToXPos p v x
         (pN, vN) = freeFallEvaluateTime p v tX
         possible = rotateBatToCenter pN vN
-        (xB, bat) = getDistanceToRangeContent possible
+        (_, bat) = getDistanceToRangeContent possible
 
-        guessTry (Inside _) = trace ("X=" ++ show x ++ " Impact: " ++ show xB) bat
-        guessTry (Above _) = trace ("X=" ++ show x ++ " Above:Impact: " ++ show xB)  moveBinary (iter + 1) x xMax (x + step)
-        guessTry (Below _) = trace ("X=" ++ show x ++ " Below:Impact: " ++ show xB)  moveBinary (iter + 1) xMin x (x - step)
+        batInv = segmentInvert bat
+        (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
+        (mInterceptInv, _, _) = fabrikToSegment stigFoot arm batInv
+        m = armToMotion arm mIntercept
+        mV = maxTimeToMotion m
+        mInv = armToMotion arm mInterceptInv
+        mVInv = maxTimeToMotion mInv
+
+        -- Current Best Motion
+        bM = bool mInv m (mV <= mVInv)
+        bMV = maxTimeToMotion bM
+
+        -- Possible Next Best Motion
+        (bMN, mVN) = move (iter + 1) (x - moveBatToCenterStepSize)
 
 
 -- | Try to intercept Ball
 tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
 tryInterceptBall arm p v tColl =
    do 
-     let bat = moveBatToCenter p v
-     let batInv = segmentInvert bat
-     let (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
-     let (mInterceptInv, _, _) = fabrikToSegment stigFoot arm batInv
-     let mV = armToMotion arm mIntercept
-     let mVInv = armToMotion arm mInterceptInv
-     let bM = bool mVInv mV (motionAverage mV <= motionAverage mVInv)
-     return $ trace ("Opponent did a proper hit we can catch at " ++ " " ++ show bat ++ "\n" ++ show bM) bM --applyMotionLimits mV -- Velocity limits
+     let bM = bestMotion arm p v
+     return $ trace ("Opponent did a proper hit we can catch at " ++ show tColl ++ "\n" ++ show bM) bM -- Velocity limits
 
 
 -- | Stig's player
@@ -314,7 +344,7 @@ stigRest = m
 stigRest2 :: Motion
 stigRest2 = m
   where
-    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.63 :+()) (Point2 0.9 0.73 :+()))
+    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.65 :+()) (Point2 0.9 0.75 :+()))
 
 -- | Get the a zeroed Motion list for Stig's arm
 stigNoMotion :: Motion

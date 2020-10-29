@@ -186,7 +186,7 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
 
     finalGuess = -- binaryGuess 0 (-binaryGuessLimit) binaryGuessLimit 0
       bool 
-        (binaryGuess 0 0 (pi/2) (pi/4)) -- Case going down
+        (binaryGuess 0 0 (pi/2) 0) -- Case going down
         (binaryGuess 0 (-pi/4) 0 (-pi/4)) -- Case going up
         goingUp
 
@@ -223,8 +223,8 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
         
         -- Ball Going Down
         guessTry x False = case insideOpponentTableX x of
-          Above _ -> trace ("X=" ++ show x ++ " Down:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-          Below _ -> trace ("X=" ++ show x ++ " Down:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Above _ -> trace ("X=" ++ show x ++ " Down:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Below _ -> trace ("X=" ++ show x ++ " Down:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
           Inside _ -> trace ("X=" ++ show x ++ " Down:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat))
 
         guess = traceShow (p, nV, t, pI) guessTry pIX goingUp

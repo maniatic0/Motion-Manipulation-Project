@@ -18,8 +18,6 @@ import PingPong.Player.Stig.GeometryHelpers
 import PingPong.Player.Stig.Kinematics
 import PingPong.Player.Stig.Fabrik
 
-import PingPong.Simulation (reflectVector)
-
 import Control.Monad
 
 -- | Simulation's gravity
@@ -94,7 +92,7 @@ reflectVelocityTable v = reflect v simulationTableDir
 
 -- | Reflect Ball Velocity against a bat
 reflectVelocityBat :: LineSegment 2 () Float -> Vector 2 Float -> Vector 2 Float
-reflectVelocityBat bat v = reflectVector v (segmentDir bat)
+reflectVelocityBat bat v = reflect v (segmentDir bat)
 
 -- | Get the normal of the free fall velocity
 freefallNormal :: Vector 2 Float -> Vector 2 Float

@@ -4,6 +4,9 @@ import PingPong.Model
 import PingPong.Draw.Gloss
 import PingPong.Simulation
 
+import System.Exit
+import Control.Monad
+
 import Graphics.Gloss (Display (InWindow), Picture, Color, white)
 import Graphics.Gloss.Interface.IO.Simulate (simulateIO)
 import Graphics.Gloss.Data.ViewPort
@@ -25,6 +28,16 @@ play ip1 ip2 = do
              simulationRate
              initialState
              (return . drawState)
-             (const update)
-    
+             realtimeUpdate
 
+realtimeUpdate :: ViewPort -> Float -> State -> IO State
+realtimeUpdate p f os = do
+  ns <- update f os
+  when (phase ns == GameOver) $ endGame ns
+  return ns
+    
+endGame :: State -> IO ()
+endGame st = do
+  terminate $ p1 st
+  terminate $ p2 st
+  exitSuccess

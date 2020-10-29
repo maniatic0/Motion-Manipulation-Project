@@ -96,9 +96,9 @@ updatePhase delta st = f $ phase st
     f (AfterRally t)  | t > delta = return $ st {phase = AfterRally  $ t - delta}
                       | otherwise = initBeforeRally st
     f (AfterGame t)   | t > delta = return $ st {phase = AfterGame   $ t - delta}
-                      | otherwise = return $ st -- the game is over, simulation should stop
-    f DuringRally     | testScore (map snd $ hits st) (view xCoord $ loc $ ball st) == Nothing = return $ st
-                      | otherwise = updateScore (unJust $ testScore (map snd $ hits st) (view xCoord $ loc $ ball st)) (score st) st
+                      | otherwise = return $ st {phase = GameOver} -- the game is over, simulation should stop
+    f DuringRally     | testScore (map snd $ hits st) (loc $ ball st) == Nothing = return $ st
+                      | otherwise = updateScore (unJust $ testScore (map snd $ hits st) (loc $ ball st)) (score st) st
 
 initBeforeGame :: State -> IO State
 initBeforeGame st = return $ st { phase = BeforeGame beforeGameTime
@@ -133,19 +133,20 @@ initAfterGame st = return $ st {phase = AfterGame  afterGameTime}
 
 unJust (Just x) = x
 
-testScore :: [Item] -> Float -> Maybe Bool
+testScore :: [Item] -> Point 2 Float -> Maybe Bool
 testScore [] _ = Nothing
 testScore [_] _ = Nothing
 testScore (Table Self : Bat Opponent : _) _ = Nothing
 testScore (Table Opponent : Bat Self : _) _ = Nothing
 testScore (Bat Self : Table Self : _) _ = Nothing
 testScore (Bat Opponent : Table Opponent : _) _ = Nothing
-testScore (_ : Bat Opponent : _) x | x > 0 && x < 1 = Just False
-                                   | otherwise      = Just True
-testScore (_ : Bat Self : _) x | x > -1 && x < 0 = Just True
-                               | otherwise       = Just False
+testScore (_ : Bat Opponent : _) (Point2 x y) | y > 0.5 && x > 0 && x < 1 = Just False
+                                              | otherwise                 = Just True
+testScore (_ : Bat Self : _) (Point2 x y) | y > 0.5 && x > -1 && x < 0 = Just True
+                                          | otherwise                  = Just False
 testScore (_ : Table Opponent : _) _ = Just True
 testScore (_ : Table Self : _) _ = Just False
+testScore (Other a : Other b : is) p = testScore (Other b : is) p
 testScore _ _ = Nothing
 
 updateScore :: Bool -> (Int, Int) -> State -> IO State

@@ -63,7 +63,7 @@ noCollide (t1, p1, s1) (t2, p2, s2) = return p2
 
 -- | Default stretching behaviour.
 defaultStretch :: Float -> Arm -> IO Motion
-defaultStretch t _ = return $ map (* cos t) [-3, 6, -6, 6, -6]
+defaultStretch t _ = return $ propcap $ map (* cos t) [-3, 6, -6, 6, -6]
 
 -- | Default dancing behaviour.
 defaultDance :: Float -> Arm -> IO Motion
@@ -73,3 +73,8 @@ defaultDance t _ = return [ 5 * sin (2.5 * (t + 0.0))
                           , 5 * sin (2.5 * (t + 0.9))
                           , 5 * sin (2.5 * (t + 1.2))
                           ]
+
+propcap :: [Float] -> [Float]
+propcap xs | m < 2 = xs
+           | otherwise = map (\x -> 2 * x / m) xs
+  where m = maximum $ map abs xs         

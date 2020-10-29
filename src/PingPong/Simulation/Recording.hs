@@ -12,6 +12,7 @@ import Graphics.Text.TrueType( Font, loadFontFile )
 import System.Directory
 import System.Process
 
+import Control.DeepSeq
 import Data.Char
 
 
@@ -45,6 +46,7 @@ play ip1 ip2 = do
 
 record :: Int -> Font -> State -> IO [Drawing PixelRGBA8 ()]
 record 0 _    _  = return []
+record _ _    st | phase st == GameOver = return []
 record n font os = do
   (ns, pic) <- step font os
   pics      <- record (n - 1) font ns 
@@ -73,7 +75,13 @@ exportFrame i pic = do
   let white = PixelRGBA8 255 255 255 255
       img = renderDrawing 1920 1080 white pic
   writePng ("recording/frame/" ++ show i ++ ".png") img
-  putStr $ if (i `mod` round frameRate == 0) then "|" else "."
+  putStr $ frameMark i
+
+frameMark :: Int -> String
+frameMark i | i `mod` (60 * round frameRate) == 0 = show $ i `div` round frameRate
+            | i `mod` (10 * round frameRate) == 0 = "#" 
+            | i `mod` round frameRate == 0 = "|" 
+            | otherwise                    = "."
 
 
 

@@ -32,7 +32,7 @@ data Player = Player
   , arm     :: Arm
   , foot    :: Float
   , prepare :: IO ()
-  , terminate :: IO () -- call this at the end (make sure interactive simulator reacts to closing)
+  , terminate :: IO () 
   , action  :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
   , stretch :: Float -> Arm -> IO Motion
   , dance   :: Float -> Arm -> IO Motion
@@ -57,7 +57,8 @@ data Phase = BeforeGame Float
            | DuringRally
            | AfterRally Float
            | AfterGame Float
-  deriving Show
+           | GameOver
+  deriving (Show, Eq)
 
 data State = State
   { phase  :: Phase -- current phase of the game

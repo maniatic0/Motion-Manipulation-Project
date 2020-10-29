@@ -384,14 +384,12 @@ stigAction _ (tColl, Other _) _ arm =
 stigAction _ (tColl, Bat Self) _ arm =
   return $
     -- We hit the ball, go to rest motion
-    let toRest = armToStigRestMotion arm
-     in trace ("We just hit the ball at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
-stigAction _ (tColl, Table Opponent) _ arm =
+     trace ("We just hit the ball at " ++ show tColl) stigNoMotion -- Velocity limits
+stigAction _ (tColl, Table Opponent) _ _ =
   return $
     -- Our hit was correct and we reached the other player's side
     -- So rest
-    let toRest = armToStigRestMotion arm
-     in trace ("We did a proper hit at " ++ show tColl) applyMotionLimits toRest -- Velocity limits
+     trace ("We did a proper hit at " ++ show tColl) stigNoMotion
 stigAction t (tColl, Air) bs arm =
   return $
     -- IInvalid State

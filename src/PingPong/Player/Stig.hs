@@ -233,7 +233,7 @@ moveBatToCenterLowLim = 0.6
 
 -- | Move bat to center high limit
 moveBatToCenterHighLim :: Float
-moveBatToCenterHighLim = 1.5
+moveBatToCenterHighLim = 1.3
 
 
 -- | Move bat to center number of steps
@@ -317,7 +317,7 @@ stigInternalArm = checkArm
       Joint red 1.247675, -- (0.1)
       Link paleBlue 0.2,
       Joint red 0.4820231, -- (-0.1)
-      Link paleBlue 0.2,
+      Link paleBlue 0.1,
       Joint red (-2.2409778), -- (-0.1)
       Link hotPink 0.1 -- Bat
     ]
@@ -332,7 +332,7 @@ stigArmLength = armLength stigArm
 
 -- | Separation from the center of the table
 stigFoot :: Float
-stigFoot = 1.4
+stigFoot = 1.3
 
 -- | Stig rest postion
 stigRest :: Motion
@@ -344,7 +344,7 @@ stigRest = m
 stigRest2 :: Motion
 stigRest2 = m
   where
-    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.65 :+()) (Point2 0.9 0.75 :+()))
+    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.75 :+()) (Point2 0.9 0.85 :+()))
 
 -- | Get the a zeroed Motion list for Stig's arm
 stigNoMotion :: Motion

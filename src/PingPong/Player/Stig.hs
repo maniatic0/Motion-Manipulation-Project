@@ -280,11 +280,11 @@ stigArm :: Arm
 stigArm =
   checkArm
     [ Link paleBlue 0.5,
-      Joint red 0.7, -- (0.1)
-      --Link paleBlue 0.3,
-      --Joint red 1.3, -- (0.1)
+      Joint red 0, -- (0.1)
       Link paleBlue 0.3,
-      Joint red 0.9, -- (-0.1)
+      Joint red 1.0, -- (0.1)
+      Link paleBlue 0.2,
+      Joint red 0.8, -- (-0.1)
       Link paleBlue 0.2,
       Joint red (1.3), -- (-0.1)
       Link hotPink 0.1 -- Bat
@@ -300,7 +300,9 @@ stigFoot = 1.5
 
 -- | Stig rest postion
 stigRest :: Motion
-stigRest = getCurrentJoints stigArm
+stigRest = m
+  where
+    (m, _) = fabrikToPoint stigFoot stigArm (Point2 1.2 0.8)
 
 -- | Get the a zeroed Motion list for Stig's arm
 stigNoMotion :: Motion

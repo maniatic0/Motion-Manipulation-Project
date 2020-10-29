@@ -347,6 +347,12 @@ data DistanceToRange r
   | Inside r
   deriving (Show)
 
+-- | Gets the content of a DistanceToRange
+getDistanceToRangeContent :: DistanceToRange r -> r
+getDistanceToRangeContent (Above a) = a
+getDistanceToRangeContent (Below a) = a
+getDistanceToRangeContent (Inside a) = a
+
 -- | Sgined Distance to Range [a,b] (a<=b)
 signedDistanceToRange :: (Num r, Floating r, Ord r, Show r) => r -> r -> r -> DistanceToRange r
 signedDistanceToRange a b t

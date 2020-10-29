@@ -154,7 +154,7 @@ placeBatInBounceCurve p v q = line
     
     -- Normal to Velocity
     n0 = freefallNormal v
-    n = rotateVector2D (q + pi/2) n0
+    n = rotateVector2D q n0
     --(n, _) = normalizeVector v
     p0 = p .+^ (n ^* (simulationBatLength / 2))
     p1 = p .-^ (n ^* (simulationBatLength / 2))
@@ -172,27 +172,28 @@ placeBatInBounceCurve p v q = line
 -- | Maximum ITerations to guess
 binaryGuessMaxIter :: Int
 binaryGuessMaxIter = 10
+
 -- | Max Binary guess
 binaryGuessLimit :: Float
 binaryGuessLimit = pi/2
 
 -- | Place the ball at the center of the opponents table
-rotateBatToCenter :: Point 2 Float -> Vector 2 Float -> LineSegment 2 () Float
-rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" placeBatInBounceCurve p v 0) finalGuess
+rotateBatToCenter :: Point 2 Float -> Vector 2 Float -> DistanceToRange (Float, LineSegment 2 () Float)
+rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below (read "Infinity" :: Float, placeBatInBounceCurve p v 0)) finalGuess
   where
     -- If we are going up
     goingUp = view yComponent v > 0
 
     finalGuess = -- binaryGuess 0 (-binaryGuessLimit) binaryGuessLimit 0
       bool 
-        (binaryGuess 0 (-pi*2/3) (0) (-pi/4)) 
-        (binaryGuess 0 (-pi*2/3) (0) (-pi/4))
+        (binaryGuess 0 0 (pi/2) (pi/4)) -- Case going down
+        (binaryGuess 0 (-pi/4) 0 (-pi/4)) -- Case going up
         goingUp
 
     -- | Guess a possible bat possition
     binaryGuess iter qmin qmax qcurr
       | noTPossible = trace "No interception with table?!" Nothing 
-      | iter >= binaryGuessMaxIter = trace ("Max Iter Selected q=" ++ show qcurr) Just bat
+      | iter >= binaryGuessMaxIter = trace ("Max Iter Selected q=" ++ show qcurr) Just (useInsideInfo insideInfo bat)
       | otherwise = guess
       where
         -- Generate bat
@@ -207,19 +208,26 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" place
         -- If Bounce is going up
         bounceGoingUp = view yComponent nV > 0
 
-        guessDir = not goingUp
+        insideInfo = insideOpponentTableX pIX
+
+        useInsideInfo (Inside _) b = Inside (pIX, b)
+        useInsideInfo (Above _) b = Below (pIX, b)
+        useInsideInfo (Below _) b = Above (pIX, b)
 
         -- Guess Selection to improve
+        -- Ball Going Up
         guessTry x True = case insideOpponentTableX x of
-                  Above _ -> trace ("X=" ++ show x ++ " T:Below" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
-                  Below _ -> trace ("X=" ++ show x ++ " T:Above" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-                  Inside _ -> trace ("X=" ++ show x ++ " Inside Selected q=" ++ show qcurr) Just bat
+                  Above _ -> trace ("X=" ++ show x ++ " Up:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+                  Below _ -> trace ("X=" ++ show x ++ " Up:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+                  Inside _ -> trace ("X=" ++ show x ++ " Up:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat))
+        
+        -- Ball Going Down
         guessTry x False = case insideOpponentTableX x of
-          Below _ -> trace ("X=" ++ show x ++ " F:Above" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-          Above _ -> trace ("X=" ++ show x ++ " F:Below" ++ show (goingUp, bounceGoingUp, guessDir) ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
-          Inside _ -> trace ("X=" ++ show x ++ " Inside Selected q=" ++ show qcurr) Just bat
+          Above _ -> trace ("X=" ++ show x ++ " Down:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+          Below _ -> trace ("X=" ++ show x ++ " Down:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Inside _ -> trace ("X=" ++ show x ++ " Down:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat))
 
-        guess = traceShow (p, nV, t, pI) guessTry pIX guessDir
+        guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
 
 
 -- | Try to intercept Ball
@@ -228,7 +236,7 @@ tryInterceptBall arm p v tColl =
    do 
      let tX = freeFallTimeToXPos p v 1.2
      let (pN, vN) = freeFallEvaluateTime p v (tX + 0.01)
-     let bat = rotateBatToCenter pN vN
+     let (x, bat) = getDistanceToRangeContent $ rotateBatToCenter pN vN
      let batInv = segmentInvert bat
      let (mIntercept, _, _) = fabrikToSegment stigFoot arm bat
      let (mInterceptInv, _, _) = fabrikToSegment stigFoot arm batInv

@@ -324,7 +324,7 @@ stigInternalArm = checkArm
       Joint red (0.5112798), -- (0.1)
       Link paleBlue 0.3,
       Joint red 1.247675, -- (0.1)
-      Link paleBlue 0.2,
+      Link paleBlue 0.25,
       Joint red 0.4820231, -- (-0.1)
       Link paleBlue 0.1,
       Joint red (-2.2409778), -- (-0.1)
@@ -427,23 +427,27 @@ stigAction _ (tColl, Other _) _ arm =
     -- Ball hit something out of the game, this means someone scored
     -- Go to rest
     let toBase = armToMotion arm stigNoMotion
-     in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     --in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     in applyMotionLimits toBase -- Velocity limits
 stigAction _ (tColl, Bat Self) _ arm =
   return $
     -- We hit the ball, go to rest motion
     let toRest2 = armToStigRestMotion2 arm 
-     in trace ("We just hit the ball at " ++ show tColl) toRest2 -- Velocity limits
+     --in trace ("We just hit the ball at " ++ show tColl) toRest2 -- Velocity limits
+     in toRest2 -- Velocity limits
 stigAction _ (tColl, Table Opponent) _ arm =
   return $
     -- Our hit was correct and we reached the other player's side
     -- So rest
     let toRest2 = armToStigRestMotion2 arm 
-     in trace ("We did a proper hit at " ++ show tColl) toRest2
+     -- in trace ("We did a proper hit at " ++ show tColl) toRest2
+     in toRest2
 stigAction t (tColl, Air) bs arm =
   return $
     -- Invalid State
     let toBase = armToMotion arm stigNoMotion
-     in trace ("Impossible State " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     -- in trace ("Impossible State " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     in applyMotionLimits toBase -- Velocity limits
 stigAction t (tColl, Table Self) bs arm =
     do 
       -- Other player did a proper hit we have to respond to 
@@ -461,8 +465,10 @@ stigAction t (tColl, Bat Opponent) bs arm =
       let mayBounce = predictTableBounce p v
 
       case mayBounce of
-        Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) (armToStigRestMotion arm) -- Velocity limits
-        Just (pT, vT, _) -> trace ("Opponent did a proper hit at " ++ show tColl) tryInterceptBall arm pT vT tColl
+        {- Nothing -> return $ trace ("Opponent did a wrong hit at " ++ show tColl) (armToStigRestMotion arm) -- Velocity limits
+        Just (pT, vT, _) -> trace ("Opponent did a proper hit at " ++ show tColl) tryInterceptBall arm pT vT tColl -}
+        Nothing -> return $ armToStigRestMotion arm
+        Just (pT, vT, _) -> tryInterceptBall arm pT vT tColl
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

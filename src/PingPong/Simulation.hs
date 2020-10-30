@@ -14,6 +14,7 @@ import Data.Foldable
 import Control.Lens hiding (snoc)
 
 import Convert
+import Transformation
 
 import Data.Vinyl.CoRec
 
@@ -21,8 +22,8 @@ import Debug.Trace
 
 import System.Random
 
-startBall :: Bool -> IO BallState
-startBall p = do
+serveBall :: Bool -> IO BallState
+serveBall p = do
   h <- randomRIO (0.9, 1)
   x <- randomRIO (1.3, 1.4)
   y <- randomRIO (-0.1, 0)
@@ -85,7 +86,6 @@ update deltaTime st = do
 
 -- update the phase: count down timer, and if reached 0, take approriate action
 -- if phase is DuringRally, then check the last thing that was hit.
-  -- need to know history???
 updatePhase :: Float -> State -> IO State
 updatePhase delta st = f $ phase st
   where 
@@ -110,7 +110,7 @@ initBeforeGame st = return $ st { phase = BeforeGame beforeGameTime
 
 initBeforeRally :: State -> IO State
 initBeforeRally st = do
-  b <- startBall True
+  b <- serveBall True
   return $ st { phase = BeforeRally beforeRallyTime
               , ball  = b {dir = Vector2 0 0}
               }
@@ -119,7 +119,7 @@ initDuringRally :: State -> IO State
 initDuringRally st = do
   let (i, j) = score st
       p      = (i + j) `mod` 4 < 2
-  b <- startBall p
+  b <- serveBall p
   return $ st { phase = DuringRally
               , hits  = [(0, Bat $ if p then Opponent else Self)] 
               , ball  = (ball st) {dir = dir b}
@@ -189,6 +189,7 @@ item 0 = Bat Self
 item 1 = Bat Opponent
 item 2 = Table Self
 item 3 = Table Opponent
+item 10 = Net
 item x = Other x
 
 newHits :: [(Float, Item)] -> (Float, Item) -> [(Float, Item)]

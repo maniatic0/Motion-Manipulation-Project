@@ -3,6 +3,8 @@ module PingPong.Player.ModelPlayer (modelPlayer) where
 import PingPong.Model
 import PingPong.Player
 
+import Transformation
+
 import Data.Geometry hiding (zero)
 import Data.Ext
 import Data.List

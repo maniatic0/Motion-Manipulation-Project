@@ -54,6 +54,11 @@ defaultPlayer = Player
   , dance   = defaultDance
   } 
 
+noPlayer :: Player
+noPlayer = defaultPlayer
+  { name = "nobody"
+  , arm = [Joint black 0]
+  }
 
 
 noCollide :: (Float, Point 2 Float, LineSegment 2 () Float) 

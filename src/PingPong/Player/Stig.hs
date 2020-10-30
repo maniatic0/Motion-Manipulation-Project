@@ -422,19 +422,26 @@ stigCollide t1 t2 = bool (error "Stig Collide Failed a Test Case") (return (f t1
 --test = stigCollide (0, Point2 (-1) 1, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 1 1 :+ ())) (1, Point2 0 0, ClosedLineSegment (Point2 0 (-1) :+ ()) (Point2 (-1) 1 :+ ()))
 
 stigAction :: Float -> (Float, Item) -> BallState -> Arm -> IO Motion
+stigAction _ (tColl, Net) _ arm =
+  return $
+    -- Ball hit the net, this means someone scored
+    -- Go to rest
+    let toBase = armToMotion arm stigNoMotion
+     --in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     in applyMotionLimits toBase 
 stigAction _ (tColl, Other _) _ arm =
   return $
     -- Ball hit something out of the game, this means someone scored
     -- Go to rest
     let toBase = armToMotion arm stigNoMotion
      --in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toBase -- Velocity limits
-     in applyMotionLimits toBase -- Velocity limits
+     in applyMotionLimits toBase 
 stigAction _ (tColl, Bat Self) _ arm =
   return $
     -- We hit the ball, go to rest motion
     let toRest2 = armToStigRestMotion2 arm 
      --in trace ("We just hit the ball at " ++ show tColl) toRest2 -- Velocity limits
-     in toRest2 -- Velocity limits
+     in toRest2
 stigAction _ (tColl, Table Opponent) _ arm =
   return $
     -- Our hit was correct and we reached the other player's side
@@ -447,7 +454,7 @@ stigAction t (tColl, Air) bs arm =
     -- Invalid State
     let toBase = armToMotion arm stigNoMotion
      -- in trace ("Impossible State " ++ show tColl) applyMotionLimits toBase -- Velocity limits
-     in applyMotionLimits toBase -- Velocity limits
+     in applyMotionLimits toBase
 stigAction t (tColl, Table Self) bs arm =
     do 
       -- Other player did a proper hit we have to respond to 
@@ -469,6 +476,13 @@ stigAction t (tColl, Bat Opponent) bs arm =
         Just (pT, vT, _) -> trace ("Opponent did a proper hit at " ++ show tColl) tryInterceptBall arm pT vT tColl -}
         Nothing -> return $ armToStigRestMotion arm
         Just (pT, vT, _) -> tryInterceptBall arm pT vT tColl
+stigAction _ (tColl, _) _ arm =
+  return $
+    -- Ball: Don't know what happened
+    -- Go to rest
+    let toBase = armToMotion arm stigNoMotion
+     --in trace ("Someone Scored at " ++ show tColl) applyMotionLimits toBase -- Velocity limits
+     in trace ("Don't know what happened at: " ++ show tColl) applyMotionLimits toBase 
 
 -- | Stig Plan Threshold
 stigPlanThreshold :: (Num r, Ord r, Fractional r) => r -> r -> r

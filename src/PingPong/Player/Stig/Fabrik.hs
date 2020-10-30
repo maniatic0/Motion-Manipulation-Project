@@ -45,7 +45,7 @@ fabrikStep links arm tgt = (newArm, err)
 
 -- | Fabrik max iteration
 fabrikMaxIter :: Int
-fabrikMaxIter = 1000
+fabrikMaxIter = 100
 
 -- | Apply the FABRIK algorithm, arm must be from end effector to base
 fabrikAlgo :: (Num r, Floating r, Ord r, Show r) => Int -> [r] -> [Point 2 r] -> Point 2 r -> ([Point 2 r], r)

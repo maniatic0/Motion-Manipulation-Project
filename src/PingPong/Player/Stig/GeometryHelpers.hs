@@ -375,7 +375,7 @@ segmentDir s = n
     (n, _) = normalizeVector $ (s ^. end . core) .-. (s ^. start . core)
 
 -- | Invert a segment
-segmentInvert :: (Num r, Floating r, Ord r, Show r) => LineSegment 2 () r -> LineSegment 2 () r 
+segmentInvert :: (Num r, Floating r, Ord r, Show r) => LineSegment 2 () r -> LineSegment 2 () r
 segmentInvert l = ClosedLineSegment (l ^. end . core :+ ()) (l ^. start . core :+ ())
 
 -- End of Geometry Helpers

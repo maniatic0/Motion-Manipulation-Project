@@ -93,7 +93,7 @@ motionAverage m = sum (map abs m) / fromIntegral (length m)
 -- | Map Arm to Motion
 mapMotion :: Arm -> Motion -> Arm
 mapMotion [] [] = []
-mapMotion (Joint c _:as) (q:qs) = Joint c q : mapMotion as qs
-mapMotion (l:as) qs = l : mapMotion as qs
+mapMotion (Joint c _ : as) (q : qs) = Joint c q : mapMotion as qs
+mapMotion (l : as) qs = l : mapMotion as qs
 
 -- End of General Helpers

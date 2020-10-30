@@ -191,7 +191,8 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
     -- | Guess a possible bat possition
     binaryGuess iter qmin qmax qcurr
       | noTPossible = trace "No interception with table?!" Nothing 
-      | iter >= binaryGuessMaxIter = trace ("Max Iter Selected q=" ++ show qcurr) Just (useInsideInfo insideInfo bat)
+      {- | iter >= binaryGuessMaxIter = trace ("Max Iter Selected q=" ++ show qcurr) Just (useInsideInfo insideInfo bat)-}
+      | iter >= binaryGuessMaxIter = Just (useInsideInfo insideInfo bat)
       | otherwise = guess
       where
         -- Generate bat
@@ -215,15 +216,21 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
         -- Guess Selection to improve
         -- Ball Going Up
         guessTry x True = case insideOpponentTableX x of
-                  Above _ -> trace ("X=" ++ show x ++ " Up:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+                  {- Above _ -> trace ("X=" ++ show x ++ " Up:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
                   Below _ -> trace ("X=" ++ show x ++ " Up:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-                  Inside _ -> trace ("X=" ++ show x ++ " Up:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat))
+                  Inside _ -> trace ("X=" ++ show x ++ " Up:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat)) -}
+                  Above _ ->  binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+                  Below _ ->  binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+                  Inside _ -> Just (Inside (pIX, bat))
         
         -- Ball Going Down
         guessTry x False = case insideOpponentTableX x of
-          Above _ -> trace ("X=" ++ show x ++ " Down:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          {- Above _ -> trace ("X=" ++ show x ++ " Down:Below " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
           Below _ -> trace ("X=" ++ show x ++ " Down:Above " ++ show bounceGoingUp ++ " qs=" ++ show (qmin, qmax, qcurr)) $ binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
-          Inside _ -> trace ("X=" ++ show x ++ " Down:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat))
+          Inside _ -> trace ("X=" ++ show x ++ " Down:Inside Selected q=" ++ show qcurr) Just (Inside (pIX, bat)) -}
+          Above _ -> binaryGuess (iter + 1) qmin qcurr ((qmin + qcurr) / 2)
+          Below _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
+          Inside _ -> Just (Inside (pIX, bat))
 
         guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
 
@@ -285,7 +292,8 @@ tryInterceptBall :: Arm -> Point 2 Float -> Vector 2 Float -> Float -> IO Motion
 tryInterceptBall arm p v tColl =
    do 
      let bM = bestMotion arm p v
-     return $ trace ("Opponent did a proper hit we can catch at " ++ show tColl ++ "\n" ++ show bM) bM -- Velocity limits
+     --return $ trace ("Opponent did a proper hit we can catch at " ++ show tColl ++ "\n" ++ show bM) bM 
+     return bM 
 
 
 -- | Stig's player
@@ -344,7 +352,7 @@ stigRest = m
 stigRest2 :: Motion
 stigRest2 = m
   where
-    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.75 :+()) (Point2 0.9 0.85 :+()))
+    (m, _, _) = fabrikToSegment stigFoot stigInternalArm (ClosedLineSegment (Point2 0.9 0.83 :+()) (Point2 0.9 0.93 :+()))
 
 -- | Get the a zeroed Motion list for Stig's arm
 stigNoMotion :: Motion

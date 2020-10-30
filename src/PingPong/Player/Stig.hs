@@ -232,7 +232,8 @@ rotateBatToCenter p v = fromMaybe (trace "Never interception with table?!" Below
           Below _ -> binaryGuess (iter + 1) qcurr qmax ((qmax + qcurr) / 2)
           Inside _ -> Just (Inside (pIX, bat))
 
-        guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
+        --guess = traceShow (p, nV, t, pI) guessTry pIX goingUp
+        guess = guessTry pIX goingUp
 
 -- | Move bat to center low limit
 moveBatToCenterLowLim :: Float
